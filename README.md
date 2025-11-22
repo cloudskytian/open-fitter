@@ -4,7 +4,7 @@ An open-source implementation compatible with "もちふぃった～", based on 
 
 ***
 
-** NOTICE: This project is currently in the very early stages of development and is not yet functional. API definitions and implementation details are subject to rapid change.**
+NOTICE: This project is currently in the very early stages of development and is not yet functional. API definitions and implementation details are subject to rapid change.
 
 ***
 

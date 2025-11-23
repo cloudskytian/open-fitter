@@ -144,15 +144,33 @@ public class RBFDeformer : MonoBehaviour
             
             DisposeNativeArrays(); // 安全のためリセット
 
-            var centersArr = ToFloat3Array(data.centers);
-            var weightsArr = ToFloat3Array(data.weights);
-            var polyArr = ToFloat3Array(data.poly_weights);
+            // 軸変換: Blender (Right-Handed Z-Up) -> Unity (Left-Handed Y-Up)
+            // Mapping: (-x, z, -y)
+            // これはBoneDeformer.csの実装と一致させるための変更です。
+            var centersArr = ConvertToUnitySpace(data.centers);
+            var weightsArr = ConvertToUnitySpace(data.weights);
+            var polyArr = ConvertToUnitySpace(data.poly_weights);
 
-            // 軸補正 (Y <-> Z)
-            float3 tempY = polyArr[2];
-            float3 tempZ = polyArr[3];
-            polyArr[2] = tempZ;
-            polyArr[3] = tempY;
+            // 多項式項の入力座標系の補正
+            // Poly = Bias + C_x * x_in + C_y * y_in + C_z * z_in
+            // Unity入力 (x_u, y_u, z_u) に対して:
+            // x_in_blender = -x_u
+            // y_in_blender = -z_u
+            // z_in_blender = y_u
+            
+            // Row 0 (Bias): 変換済み (ConvertToUnitySpaceで出力座標系は変換されている)
+            // Row 1 (X coeff): x_in = -x_u なので、係数を反転
+            polyArr[1] = -polyArr[1];
+            
+            // Row 2 (Y coeff) & Row 3 (Z coeff):
+            // Term Y: C_y * y_in = C_y * (-z_u) -> UnityのZ係数(Row 3)に -C_y をセット
+            // Term Z: C_z * z_in = C_z * (y_u)  -> UnityのY係数(Row 2)に C_z をセット
+            
+            float3 oldRow2 = polyArr[2]; // C_y (converted to Unity output space)
+            float3 oldRow3 = polyArr[3]; // C_z (converted to Unity output space)
+            
+            polyArr[2] = oldRow3;  // New Y coeff = Old Z coeff
+            polyArr[3] = -oldRow2; // New Z coeff = -Old Y coeff
 
             centers = new NativeArray<float3>(centersArr, Allocator.Persistent);
             weights = new NativeArray<float3>(weightsArr, Allocator.Persistent);
@@ -167,12 +185,13 @@ public class RBFDeformer : MonoBehaviour
         }
     }
 
-    float3[] ToFloat3Array(List<List<float>> list)
+    float3[] ConvertToUnitySpace(List<List<float>> list)
     {
         float3[] result = new float3[list.Count];
         for (int i = 0; i < list.Count; i++)
         {
-            result[i] = new float3(list[i][0], list[i][2], list[i][1]);
+            // Blender (x, y, z) -> Unity (-x, z, -y)
+            result[i] = new float3(-list[i][0], list[i][2], -list[i][1]);
         }
         return result;
     }

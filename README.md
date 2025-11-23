@@ -4,7 +4,9 @@ An open-source implementation compatible with "もちふぃった～", based on 
 
 ***
 
-NOTICE: This project is currently in the very early stages of development and is not yet functional. API definitions and implementation details are subject to rapid change.
+NOTICE: This project is currently in the Proof of Concept (PoC) phase and is not intended for general use. It does not yet provide functional features. API definitions and implementation details are subject to rapid change.
+
+注意: 本プロジェクトは現在、概念実証（PoC）を中心とした開発段階にあり、機能を提供できる状態ではありません。API定義や実装の詳細は頻繁に変更される可能性があります。
 
 ***
 

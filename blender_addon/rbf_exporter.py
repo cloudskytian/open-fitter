@@ -89,6 +89,102 @@ class RBFCore:
         self.weights = x[:num_pts]
         self.polynomial_weights = x[num_pts:]
 
+    def create_adaptive_deformation_field(self, source_points, target_points, epsilon, smoothing):
+        """
+        Creates an adaptive deformation field.
+        Currently wraps the standard RBF fitting, but allows for future expansion
+        to adaptive point selection or parameter tuning.
+        """
+        # Future: Implement adaptive sampling or epsilon tuning here
+        return fit_rbf_model(source_points, target_points, epsilon, smoothing)
+
+# ------------------------------------------------------------------------
+# Helper Functions
+# ------------------------------------------------------------------------
+
+def extract_vertices(key_block):
+    num_verts = len(key_block.data)
+    verts = np.zeros((num_verts, 3), dtype=np.float32)
+    key_block.data.foreach_get("co", verts.ravel())
+    return verts
+
+def filter_significant_points(centers, deltas, threshold=0.0001):
+    mags = np.linalg.norm(deltas, axis=1)
+    mask = mags > threshold
+    return centers[mask], deltas[mask], mask
+
+def apply_x_mirror(centers, deltas):
+    # Mirror points with X > epsilon (positive side)
+    mirror_mask = centers[:, 0] > 0.0001
+    mirror_centers = centers[mirror_mask].copy()
+    mirror_deltas = deltas[mirror_mask].copy()
+    
+    mirror_centers[:, 0] *= -1
+    mirror_deltas[:, 0] *= -1
+    
+    return np.vstack([centers, mirror_centers]), np.vstack([deltas, mirror_deltas])
+
+def downsample_points(centers, deltas, epsilon, max_points):
+    # Grid Sampling
+    grid_spacing = max(epsilon * 0.2, 0.001)
+    grid = {}
+    for i, p in enumerate(centers):
+        key = (int(p[0]/grid_spacing), int(p[1]/grid_spacing), int(p[2]/grid_spacing))
+        if key not in grid:
+            grid[key] = i
+    
+    indices = list(grid.values())
+    indices.sort()
+    centers = centers[indices]
+    deltas = deltas[indices]
+    
+    # Random Downsampling
+    if len(centers) > max_points:
+        np.random.seed(42)
+        indices = np.random.choice(len(centers), max_points, replace=False)
+        centers = centers[indices]
+        deltas = deltas[indices]
+        
+    return centers, deltas
+
+def calculate_bounds(points, margin, enable_mirror=False):
+    # Calculate bounds of the active points
+    # If mirror is enabled, we should include the mirrored bounds too
+    
+    min_b = np.min(points, axis=0)
+    max_b = np.max(points, axis=0)
+    
+    if enable_mirror:
+        # If we mirror, the X bounds will be symmetric
+        # Max X becomes max(Max X, -Min X)
+        # Min X becomes min(Min X, -Max X)
+        # But simpler: just mirror the points and check min/max
+        mirror_points = points.copy()
+        mirror_points[:, 0] *= -1
+        
+        all_points = np.vstack([points, mirror_points])
+        min_b = np.min(all_points, axis=0)
+        max_b = np.max(all_points, axis=0)
+    
+    return (min_b - margin), (max_b + margin)
+
+def fit_rbf_model(centers, targets, epsilon, smoothing):
+    rbf = RBFCore(epsilon=epsilon, smoothing=smoothing)
+    rbf.fit(centers, targets)
+    return rbf
+
+def create_rbf_entry(name, weight, rbf, centers, bounds_min, bounds_max):
+    return {
+        "name": name,
+        "weight": weight,
+        "epsilon": float(rbf.epsilon),
+        "centers": centers.tolist(),
+        "weights": rbf.weights.tolist(),
+        "poly_weights": rbf.polynomial_weights.tolist(),
+        "bounds_min": bounds_min.tolist(),
+        "bounds_max": bounds_max.tolist()
+    }
+
 # ------------------------------------------------------------------------
 # Blender Operator & Logic
 # ------------------------------------------------------------------------
@@ -195,362 +291,59 @@ class OPENFITTER_OT_export_rbf_json(bpy.types.Operator):
             self.report({'ERROR'}, f"Target Shape Key '{target_name}' not found")
             return {'CANCELLED'}
             
-        # --- Extract Data ---
+        # --- 1. Main Deformation (Basis -> Target) ---
         print(f"Extracting vertices from {obj.name}...")
-        
-        # We use the raw shape key coordinates (Local Space).
-        # This assumes the deformation field is relative to the mesh's local space.
         
         basis_block = obj.data.shape_keys.key_blocks[basis_name]
         target_block = obj.data.shape_keys.key_blocks[target_name]
         
-        num_verts = len(basis_block.data)
-        basis_verts = np.zeros((num_verts, 3), dtype=np.float32)
-        target_verts = np.zeros((num_verts, 3), dtype=np.float32)
-        
-        basis_block.data.foreach_get("co", basis_verts.ravel())
-        target_block.data.foreach_get("co", target_verts.ravel())
+        basis_verts = extract_vertices(basis_block)
+        target_verts = extract_vertices(target_block)
         
         deltas = target_verts - basis_verts
         
-        # --- Filter Points ---
-        # 1. Remove points with very small movement (optimization)
-        # Calculate magnitude of deltas
-        mags = np.linalg.norm(deltas, axis=1)
-        mask = mags > 0.0001
-        
-        centers = basis_verts[mask]
-        deltas_filtered = deltas[mask]
-        
-        print(f"Points with delta > 0.0001: {len(centers)} / {num_verts}")
+        # Filter
+        centers, deltas_filtered, _ = filter_significant_points(basis_verts, deltas)
+        print(f"Points with delta > 0.0001: {len(centers)} / {len(basis_verts)}")
         
         if len(centers) == 0:
             self.report({'WARNING'}, "No significant deformation found between keys.")
             return {'CANCELLED'}
 
-        # 2. X-Mirroring
+        # Mirror
         if props.enable_x_mirror:
             print("Applying X-Mirroring...")
-            # Assuming X is the symmetry axis (standard in Blender)
-            # We mirror points with X > epsilon
-            mirror_mask = centers[:, 0] > 0.0001
-            
-            mirror_centers = centers[mirror_mask].copy()
-            mirror_deltas = deltas_filtered[mirror_mask].copy()
-            
-            mirror_centers[:, 0] *= -1
-            mirror_deltas[:, 0] *= -1 # Mirror the delta vector too
-            
-            centers = np.vstack([centers, mirror_centers])
-            deltas_filtered = np.vstack([deltas_filtered, mirror_deltas])
+            centers, deltas_filtered = apply_x_mirror(centers, deltas_filtered)
             print(f"Points after mirroring: {len(centers)}")
 
-        # 3. Downsampling & Distribution
-        # Use Voxel Grid Sampling to ensure uniform distribution and determinism
-        
-        # Calculate bounding box to estimate density
-        min_b = np.min(centers, axis=0)
-        max_b = np.max(centers, axis=0)
-        diag = np.linalg.norm(max_b - min_b)
-        
-        # Grid spacing: Use a fraction of Epsilon if available, or bounding box
-        # If points are closer than epsilon/2, they are redundant and cause instability.
-        # Let's use epsilon * 0.2 as a safe minimum spacing.
-        grid_spacing = props.epsilon * 0.2
-        if grid_spacing < 0.001: grid_spacing = 0.001
-        
-        print(f"Voxel Grid Filter: spacing {grid_spacing:.4f}")
-        
-        grid = {}
-        for i, p in enumerate(centers):
-            # Quantize
-            key = (int(p[0]/grid_spacing), int(p[1]/grid_spacing), int(p[2]/grid_spacing))
-            if key not in grid:
-                grid[key] = i
-        
-        indices = list(grid.values())
-        indices.sort() # Ensure deterministic order
-        
-        centers = centers[indices]
-        deltas_filtered = deltas_filtered[indices]
-        
+        # Downsample
+        centers, deltas_filtered = downsample_points(centers, deltas_filtered, props.epsilon, props.max_points)
         print(f"Points after Grid Filter: {len(centers)}")
 
-        # Then Hard Limit
-        max_points = props.max_points
-        if len(centers) > max_points:
-            print(f"Downsampling to {max_points}...")
-            np.random.seed(42) # FIX: Deterministic Seed
-            indices = np.random.choice(len(centers), max_points, replace=False)
-            centers = centers[indices]
-            deltas_filtered = deltas_filtered[indices]
-            
-        # --- RBF Fit ---
-        print("Fitting RBF...")
+        # Fit RBF
+        print("Fitting Main RBF...")
         target_points = centers + deltas_filtered
         
-        rbf = RBFCore(epsilon=props.epsilon, smoothing=props.smoothing)
         start_time = time.time()
-        rbf.fit(centers, target_points)
+        rbf = self.create_adaptive_deformation_field(centers, target_points, props.epsilon, props.smoothing)
         print(f"RBF Fit finished in {time.time() - start_time:.4f}s")
         
-        # --- Export ---
+        # Init Export Data
         export_data = {
             "epsilon": float(rbf.epsilon),
             "centers": centers.tolist(),
             "weights": rbf.weights.tolist(),
             "poly_weights": rbf.polynomial_weights.tolist(),
-            "shape_keys": [] # List of additional RBF fields for shape keys
+            "shape_keys": []
         }
 
-        # --- Process Additional Shape Keys ---
-        # If a Target Body Object is specified, use its shape keys to generate RBF fields
-        # for transferring shape keys (e.g. Breasts_Big) to the fitted clothing.
-        # Otherwise, fallback to the old behavior (using extra keys on the active object).
-        
+        # --- 2. Additional Shape Keys ---
         target_body = props.target_body_object
         
         if target_body and target_body.type == 'MESH' and target_body.data.shape_keys:
-            print(f"Processing shape keys from Target Body: {target_body.name}")
-            
-            # We need the vertices of the Target Body in its Basis state.
-            # These vertices will serve as the "Centers" for the Shape Key RBFs.
-            
-            tb_mesh = target_body.data
-            tb_basis_key = tb_mesh.shape_keys.key_blocks[0] # Assume first key is Basis
-            tb_num_verts = len(tb_basis_key.data)
-            
-            tb_basis_verts = np.zeros((tb_num_verts, 3), dtype=np.float32)
-            tb_basis_key.data.foreach_get("co", tb_basis_verts.ravel())
-            
-            for key_block in tb_mesh.shape_keys.key_blocks:
-                if key_block == tb_basis_key: continue # Skip Basis
-                
-                print(f"Processing Target Body Key: {key_block.name}")
-                
-                # Extract Key Verts
-                tb_key_verts = np.zeros((tb_num_verts, 3), dtype=np.float32)
-                key_block.data.foreach_get("co", tb_key_verts.ravel())
-                
-                # Delta = Key - Basis
-                key_deltas = tb_key_verts - tb_basis_verts
-                
-                # Filter
-                key_mags = np.linalg.norm(key_deltas, axis=1)
-                key_mask = key_mags > 0.0001
-                
-                # Active Points (Moving)
-                active_centers = tb_basis_verts[key_mask]
-                active_deltas = key_deltas[key_mask]
-                
-                # Anchor Points (Static)
-                # To prevent global distortion (RBF bleeding into undefined areas), we include points that do NOT move.
-                # These "Anchor Points" force the deformation to zero in areas unaffected by the shape key.
-                
-                anchor_mask = ~key_mask
-                anchor_centers = tb_basis_verts[anchor_mask]
-                anchor_deltas = key_deltas[anchor_mask] # Should be (0,0,0)
-                
-                num_active = len(active_centers)
-                if num_active == 0:
-                    continue
-                
-                # Combine Active and Anchor points.
-                # The subsequent Grid/Random downsampling will ensure a balanced distribution.
-                key_centers = np.vstack([active_centers, anchor_centers])
-                key_deltas_filtered = np.vstack([active_deltas, anchor_deltas])
-
-                # X-Mirror
-                if props.enable_x_mirror:
-                    mirror_mask = key_centers[:, 0] > 0.0001
-                    mirror_centers = key_centers[mirror_mask].copy()
-                    mirror_deltas = key_deltas_filtered[mirror_mask].copy()
-                    mirror_centers[:, 0] *= -1
-                    mirror_deltas[:, 0] *= -1
-                    key_centers = np.vstack([key_centers, mirror_centers])
-                    key_deltas_filtered = np.vstack([key_deltas_filtered, mirror_deltas])
-
-                # Downsample
-                # Grid
-                grid = {}
-                for i, p in enumerate(key_centers):
-                    k = (int(p[0]/grid_spacing), int(p[1]/grid_spacing), int(p[2]/grid_spacing))
-                    if k not in grid: grid[k] = i
-                indices = list(grid.values())
-                indices.sort()
-                key_centers = key_centers[indices]
-                key_deltas_filtered = key_deltas_filtered[indices]
-                
-                # Random
-                if len(key_centers) > max_points:
-                    np.random.seed(42)
-                    indices = np.random.choice(len(key_centers), max_points, replace=False)
-                    key_centers = key_centers[indices]
-                    key_deltas_filtered = key_deltas_filtered[indices]
-                    
-                # Fit RBF
-                #
-
-
-
-                
-                print(f"Fitting RBF for {key_block.name} (2-Step Calculation)...")
-                
-                # --- Step 1: Basis -> 0.5 ---
-                # Target points at 0.5
-                # P_0.5 = P_basis + (P_key - P_basis) * 0.5
-
-                
-                # Centers: Basis Verts (active + anchor)
-                # Deltas: (Key - Basis) * 0.5
-                
-                step1_centers = key_centers
-                step1_deltas = key_deltas_filtered * 0.5
-                step1_targets = step1_centers + step1_deltas
-                
-                rbf_step1 = RBFCore(epsilon=props.epsilon, smoothing=props.smoothing)
-                rbf_step1.fit(step1_centers, step1_targets)
-                
-                # --- Step 2: 0.5 -> 1.0 ---
-                # Source: Target points at 0.5 (step1_targets)
-                # Target: Target points at 1.0 (key_target_points)
-                
-                # Define key_target_points (Target at 1.0)
-                key_target_points = key_centers + key_deltas_filtered
-                
-                step2_centers = step1_targets
-                step2_targets = key_target_points
-                
-                rbf_step2 = RBFCore(epsilon=props.epsilon, smoothing=props.smoothing)
-                rbf_step2.fit(step2_centers, step2_targets)
-                
-                # Calculate Bounds (using the union of start and end positions to be safe)
-                # We use the original active centers logic for bounds
-                final_active_centers = active_centers.copy()
-                if props.enable_x_mirror:
-                    mirror_active_mask = active_centers[:, 0] > 0.0001
-                    mirror_active = active_centers[mirror_active_mask].copy()
-                    mirror_active[:, 0] *= -1
-                    final_active_centers = np.vstack([final_active_centers, mirror_active])
-                
-                min_b = np.min(final_active_centers, axis=0)
-                max_b = np.max(final_active_centers, axis=0)
-                
-                # Expand bounds to include the deformed state (approx)
-                # Since we don't know the exact deformed bounds of the clothing, 
-                # we just add a generous margin.
-                margin = props.mask_margin
-                min_b -= margin
-                max_b += margin
-
-                # Export TWO entries for this key: one for 50%, one for 100%
-                
-                export_data["shape_keys"].append({
-                    "name": key_block.name,
-                    "weight": 50.0, # Intermediate frame
-                    "epsilon": float(rbf_step1.epsilon),
-                    "centers": step1_centers.tolist(),
-                    "weights": rbf_step1.weights.tolist(),
-                    "poly_weights": rbf_step1.polynomial_weights.tolist(),
-                    "bounds_min": min_b.tolist(),
-                    "bounds_max": max_b.tolist()
-                })
-                
-                export_data["shape_keys"].append({
-                    "name": key_block.name,
-                    "weight": 100.0, # Final frame
-                    "epsilon": float(rbf_step2.epsilon),
-                    "centers": step2_centers.tolist(),
-                    "weights": rbf_step2.weights.tolist(),
-                    "poly_weights": rbf_step2.polynomial_weights.tolist(),
-                    "bounds_min": min_b.tolist(),
-                    "bounds_max": max_b.tolist()
-                })
-
+            self.process_target_body_keys(target_body, props, export_data)
         else:
-            # Fallback: Use extra keys on the active object (Old Logic)
-            # This is useful if the user merged everything into one mesh.
-            for key_block in obj.data.shape_keys.key_blocks:
-                if key_block.name == basis_name or key_block.name == target_name:
-                    continue
-                    
-                print(f"Processing additional shape key (Active Object): {key_block.name}")
-                
-                # Extract vertices for this key
-                key_verts = np.zeros((num_verts, 3), dtype=np.float32)
-                key_block.data.foreach_get("co", key_verts.ravel())
-                
-                # Source for this RBF is the Target Verts of the main deformation
-                # (which we already extracted as `target_verts`)
-                
-                # Delta = Key - Target
-                key_deltas = key_verts - target_verts
-                
-                # Filter
-                key_mags = np.linalg.norm(key_deltas, axis=1)
-                key_mask = key_mags > 0.0001
-                
-                key_centers = target_verts[key_mask] # Centers are on the Target Mesh
-                key_deltas_filtered = key_deltas[key_mask]
-                
-                if len(key_centers) == 0:
-                    print(f"Skipping {key_block.name}: No significant difference from Target.")
-                    continue
-                    
-                # X-Mirror (if enabled)
-                if props.enable_x_mirror:
-                    mirror_mask = key_centers[:, 0] > 0.0001
-                    mirror_centers = key_centers[mirror_mask].copy()
-                    mirror_deltas = key_deltas_filtered[mirror_mask].copy()
-                    mirror_centers[:, 0] *= -1
-                    mirror_deltas[:, 0] *= -1
-                    key_centers = np.vstack([key_centers, mirror_centers])
-                    key_deltas_filtered = np.vstack([key_deltas_filtered, mirror_deltas])
-
-                # Downsample (Grid + Random)
-                # Grid
-                grid = {}
-                for i, p in enumerate(key_centers):
-                    k = (int(p[0]/grid_spacing), int(p[1]/grid_spacing), int(p[2]/grid_spacing))
-                    if k not in grid: grid[k] = i
-                indices = list(grid.values())
-                indices.sort()
-                key_centers = key_centers[indices]
-                key_deltas_filtered = key_deltas_filtered[indices]
-                
-                # Random
-                if len(key_centers) > max_points:
-                    np.random.seed(42)
-                    indices = np.random.choice(len(key_centers), max_points, replace=False)
-                    key_centers = key_centers[indices]
-                    key_deltas_filtered = key_deltas_filtered[indices]
-                    
-                # Fit RBF
-                print(f"Fitting RBF for {key_block.name} ({len(key_centers)} points)...")
-                key_target_points = key_centers + key_deltas_filtered
-                
-                key_rbf = RBFCore(epsilon=props.epsilon, smoothing=props.smoothing)
-                key_rbf.fit(key_centers, key_target_points)
-                
-                # Calculate Bounding Box of ACTIVE points (for masking)
-                
-                min_b = np.min(key_centers, axis=0)
-                max_b = np.max(key_centers, axis=0)
-                
-                # Apply Margin
-                margin = props.mask_margin
-                min_b -= margin
-                max_b += margin
-                
-                export_data["shape_keys"].append({
-                    "name": key_block.name,
-                    "epsilon": float(key_rbf.epsilon),
-                    "centers": key_centers.tolist(),
-                    "weights": key_rbf.weights.tolist(),
-                    "poly_weights": key_rbf.polynomial_weights.tolist(),
-                    "bounds_min": min_b.tolist(),
-                    "bounds_max": max_b.tolist()
-                })
+            self.process_fallback_keys(obj, basis_name, target_name, target_verts, props, export_data)
         
         with open(self.filepath, 'w') as f:
             json.dump(export_data, f)
@@ -558,122 +351,179 @@ class OPENFITTER_OT_export_rbf_json(bpy.types.Operator):
         self.report({'INFO'}, f"Saved RBF data to {self.filepath} (with {len(export_data['shape_keys'])} extra shapes)")
         return {'FINISHED'}
 
-# ------------------------------------------------------------------------
-# UI Panel & Properties
-# ------------------------------------------------------------------------
-
-class OpenFitterRBFProperties(bpy.types.PropertyGroup):
-    # Main Deformation (Source -> Target)
-    basis_shape_key: bpy.props.StringProperty(
-        name="Basis Key",
-        description="The base shape key (usually Basis)",
-        default="Basis"
-    )
-    target_shape_key: bpy.props.StringProperty(
-        name="Target Key",
-        description="The shape key representing the deformation",
-        default=""
-    )
-    
-    # Optional: Target Body for Shape Key Transfer
-    target_body_object: bpy.props.PointerProperty(
-        name="Target Body",
-        type=bpy.types.Object,
-        description="The target body mesh containing shape keys to transfer (e.g. Breasts_Big)"
-    )
-    
-    epsilon: bpy.props.FloatProperty(
-        name="Epsilon",
-        description="RBF Kernel Epsilon (Width)",
-        default=0.5,
-        min=0.001
-    )
-    smoothing: bpy.props.FloatProperty(
-        name="Smoothing",
-        description="Regularization parameter. Higher values make the deformation smoother but less accurate to the original points.",
-        default=0.01,
-        min=0.0,
-        precision=4
-    )
-    max_points: bpy.props.IntProperty(
-        name="Max Points",
-        description="Maximum number of control points (downsampled randomly)",
-        default=500,
-        min=10
-    )
-    enable_x_mirror: bpy.props.BoolProperty(
-        name="X Mirror",
-        description="Mirror points across X axis (useful for symmetric meshes)",
-        default=False
-    )
-    
-    mask_margin: bpy.props.FloatProperty(
-        name="Mask Margin",
-        description="Margin for the bounding box mask of shape keys. Vertices outside (Active Region + Margin) will not be deformed.",
-        default=0.2,
-        min=0.0
-    )
-
-class OPENFITTER_PT_rbf_export(bpy.types.Panel):
-    bl_label = "RBF Field Export"
-    bl_idname = "OPENFITTER_PT_rbf_export"
-    bl_space_type = 'VIEW_3D'
-    bl_region_type = 'UI'
-    bl_category = "OpenFitter"
-    
-    def draw(self, context):
-        layout = self.layout
-        props = context.scene.openfitter_rbf_props
-        obj = context.active_object
+    def process_target_body_keys(self, target_body, props, export_data):
+        print(f"Processing shape keys from Target Body: {target_body.name}")
         
-        layout.label(text="Main Deformation (Active Mesh)", icon='MESH_DATA')
-        layout.label(text="Active: " + (obj.name if obj else "None"))
+        tb_mesh = target_body.data
+        tb_basis_key = tb_mesh.shape_keys.key_blocks[0]
+        tb_basis_verts = extract_vertices(tb_basis_key)
         
-        if obj and obj.type == 'MESH' and obj.data.shape_keys:
-            layout.prop_search(props, "basis_shape_key", obj.data.shape_keys, "key_blocks", text="Basis")
-            layout.prop_search(props, "target_shape_key", obj.data.shape_keys, "key_blocks", text="Target")
+        for key_block in tb_mesh.shape_keys.key_blocks:
+            if key_block == tb_basis_key: continue
             
-            layout.separator()
-            layout.label(text="Shape Key Transfer (Optional)", icon='SHAPEKEY_DATA')
-            layout.prop(props, "target_body_object")
+            print(f"Processing Target Body Key: {key_block.name}")
             
-            layout.separator()
-            layout.label(text="Settings", icon='PREFERENCES')
+            tb_key_verts = extract_vertices(key_block)
+            key_deltas = tb_key_verts - tb_basis_verts
             
-            row = layout.row(align=True)
-            row.prop(props, "epsilon")
-            row.operator("openfitter.estimate_epsilon", text="", icon='DRIVER')
+            # Identify Active and Anchor points
+            active_centers, active_deltas, key_mask = filter_significant_points(tb_basis_verts, key_deltas)
             
-            layout.prop(props, "smoothing")
-            layout.prop(props, "max_points")
-            layout.prop(props, "enable_x_mirror")
-            layout.prop(props, "mask_margin")
+            if len(active_centers) == 0:
+                continue
             
-            layout.separator()
-            layout.operator("openfitter.export_rbf_json", icon='EXPORT')
-        else:
-            layout.label(text="Select a Mesh with Shape Keys", icon='INFO')
+            # Anchor Points (Static)
+            anchor_mask = ~key_mask
+            anchor_centers = tb_basis_verts[anchor_mask]
+            anchor_deltas = key_deltas[anchor_mask] # Should be (0,0,0)
+            
+            # Combine
+            key_centers = np.vstack([active_centers, anchor_centers])
+            key_deltas_filtered = np.vstack([active_deltas, anchor_deltas])
+
+            # Mirror
+            if props.enable_x_mirror:
+                key_centers, key_deltas_filtered = apply_x_mirror(key_centers, key_deltas_filtered)
+
+            # Downsample
+            key_centers, key_deltas_filtered = downsample_points(key_centers, key_deltas_filtered, props.epsilon, props.max_points)
+            
+            # --- Two-Step Calculation ---
+            print(f"Fitting RBF for {key_block.name} (2-Step Calculation)...")
+            
+            # Step 1: Basis -> 0.5
+            step1_centers = key_centers
+            step1_deltas = key_deltas_filtered * 0.5
+            step1_targets = step1_centers + step1_deltas
+            
+            rbf_step1 = self.create_adaptive_deformation_field(step1_centers, step1_targets, props.epsilon, props.smoothing)
+            
+            # Step 2: 0.5 -> 1.0
+            key_target_points = key_centers + key_deltas_filtered # Target at 1.0
+            step2_centers = step1_targets
+            step2_targets = key_target_points
+            
+            rbf_step2 = self.create_adaptive_deformation_field(step2_centers, step2_targets, props.epsilon, props.smoothing)
+            
+            # Calculate Bounds (Active Points + Mirror if needed)
+            # We use the original active_centers for bounds calculation
+            min_b, max_b = calculate_bounds(active_centers, props.mask_margin, props.enable_x_mirror)
+            
+            # Export Entries
+            export_data["shape_keys"].append(create_rbf_entry(
+                key_block.name, 50.0, rbf_step1, step1_centers, min_b, max_b
+            ))
+            
+            export_data["shape_keys"].append(create_rbf_entry(
+                key_block.name, 100.0, rbf_step2, step2_centers, min_b, max_b
+            ))
+
+    def process_fallback_keys(self, obj, basis_name, target_name, target_verts, props, export_data):
+        # Fallback: Use extra keys on the active object
+        for key_block in obj.data.shape_keys.key_blocks:
+            if key_block.name == basis_name or key_block.name == target_name:
+                continue
+                
+            print(f"Processing additional shape key (Active Object): {key_block.name}")
+            
+            key_verts = extract_vertices(key_block)
+            key_deltas = key_verts - target_verts
+            
+            # Filter
+            key_centers, key_deltas_filtered, _ = filter_significant_points(target_verts, key_deltas)
+            
+            if len(key_centers) == 0:
+                print(f"Skipping {key_block.name}: No significant difference from Target.")
+                continue
+                
+            # Mirror
+            if props.enable_x_mirror:
+                key_centers, key_deltas_filtered = apply_x_mirror(key_centers, key_deltas_filtered)
+
+            # Downsample
+            key_centers, key_deltas_filtered = downsample_points(key_centers, key_deltas_filtered, props.epsilon, props.max_points)
+            
+            # Fit RBF
+            print(f"Fitting RBF for {key_block.name} ({len(key_centers)} points)...")
+            key_target_points = key_centers + key_deltas_filtered
+            
+            key_rbf = self.create_adaptive_deformation_field(key_centers, key_target_points, props.epsilon, props.smoothing)
+            
+            # Calculate Bounds
+            # For fallback, active points are key_centers (since we filtered by delta)
+            # But key_centers might include mirrored points now.
+            # calculate_bounds handles mirroring if we pass the raw points, but here key_centers is already mirrored.
+            # So we just pass key_centers and disable internal mirroring in calculate_bounds.
+            min_b, max_b = calculate_bounds(key_centers, props.mask_margin, enable_mirror=False)
+            
+            export_data["shape_keys"].append(create_rbf_entry(
+                key_block.name, 100.0, key_rbf, key_centers, min_b, max_b
+            ))
 
 # ------------------------------------------------------------------------
-# Registration
+# Helper Functions
 # ------------------------------------------------------------------------
 
-classes = (
-    OpenFitterRBFProperties,
-    OPENFITTER_OT_estimate_epsilon,
-    OPENFITTER_OT_export_rbf_json,
-    OPENFITTER_PT_rbf_export,
-)
+def extract_vertices(key_block):
+    num_verts = len(key_block.data)
+    verts = np.zeros((num_verts, 3), dtype=np.float32)
+    key_block.data.foreach_get("co", verts.ravel())
+    return verts
 
-def register():
-    for cls in classes:
-        bpy.utils.register_class(cls)
-    bpy.types.Scene.openfitter_rbf_props = bpy.props.PointerProperty(type=OpenFitterRBFProperties)
+def filter_significant_points(centers, deltas, threshold=0.0001):
+    mags = np.linalg.norm(deltas, axis=1)
+    mask = mags > threshold
+    return centers[mask], deltas[mask], mask
 
-def unregister():
-    del bpy.types.Scene.openfitter_rbf_props
-    for cls in reversed(classes):
-        bpy.utils.unregister_class(cls)
+def apply_x_mirror(centers, deltas):
+    # Mirror points with X > epsilon (positive side)
+    mirror_mask = centers[:, 0] > 0.0001
+    mirror_centers = centers[mirror_mask].copy()
+    mirror_deltas = deltas[mirror_mask].copy()
+    
+    mirror_centers[:, 0] *= -1
+    mirror_deltas[:, 0] *= -1
+    
+    return np.vstack([centers, mirror_centers]), np.vstack([deltas, mirror_deltas])
 
-if __name__ == "__main__":
-    register()
+def downsample_points(centers, deltas, epsilon, max_points):
+    # Grid Sampling
+    grid_spacing = max(epsilon * 0.2, 0.001)
+    grid = {}
+    for i, p in enumerate(centers):
+        key = (int(p[0]/grid_spacing), int(p[1]/grid_spacing), int(p[2]/grid_spacing))
+        if key not in grid:
+            grid[key] = i
+    
+    indices = list(grid.values())
+    indices.sort()
+    centers = centers[indices]
+    deltas = deltas[indices]
+    
+    # Random Downsampling
+    if len(centers) > max_points:
+        np.random.seed(42)
+        indices = np.random.choice(len(centers), max_points, replace=False)
+        centers = centers[indices]
+        deltas = deltas[indices]
+        
+    return centers, deltas
+
+def calculate_bounds(points, margin, enable_mirror=False):
+    # Calculate bounds of the active points
+    # If mirror is enabled, we should include the mirrored bounds too
+    
+    min_b = np.min(points, axis=0)
+    max_b = np.max(points, axis=0)
+    
+    if enable_mirror:
+        # If we mirror, the X bounds will be symmetric
+        # Max X becomes max(Max X, -Min X)
+        # Min X becomes min(Min X, -Max X)
+        # But simpler: just mirror the points and check min/max
+        mirror_points = points.copy()
+        mirror_points[:, 0] *= -1
+        
+        all_points = np.vstack([points, mirror_points])
+        min_b = np.min(all_points, axis=0)
+        max_b = np.max(all_points, axis=0)

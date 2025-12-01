@@ -37,3 +37,6 @@
 !/blender_addon/**
 
 Original.py
+
+# Ignore extracted scripts
+/src/upstream/extracted/

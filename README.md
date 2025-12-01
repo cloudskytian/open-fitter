@@ -20,7 +20,7 @@ The project is currently in the phase of analyzing and structuring the original 
 We are transitioning from our initial implementation to the core logic obtained from upstream to achieve more accurate behavior.
 
 *   Legacy Implementation:
-    The bone control logic originally inferred and implemented independently. This corresponds to the C# code and other components currently in the repository.
+    The bone and meshes control logic originally inferred and implemented independently. This corresponds to the C# code and other components currently in the repository.
 
 *   Upstream-based Implementation (In Progress):
     GPL code derived from the original product, located in `src/upstream/`.
@@ -83,12 +83,12 @@ Nine Gatesによって公開されたGPL-3コンポーネントに基づき、RB
 
 ***
 
-## アーキテクチャの刷新について (Current Roadmap)
+## アーキテクチャの刷新について
 
 当初の独自実装から、より正確な挙動を実現するために、upstreamより取得したコアロジックへの移行を進めています。
 
 *   レガシー実装:
-    これまで独自に推測・実装していたボーン制御ロジック。現在のリポジトリに含まれるC#コード等が該当します。
+    これまで独自に推測・実装していたボーン・メッシュの制御ロジック。現在のリポジトリに含まれるC#コード等が該当します。
 
 *   Upstreamに基づく実装 (進行中):
     `src/upstream/` に追加された、本家製品由来のGPLコード。

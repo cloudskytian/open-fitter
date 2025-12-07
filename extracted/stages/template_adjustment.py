@@ -18,7 +18,7 @@ for _p in (_PARENT_DIR, _GRANDPARENT_DIR):
 from blender_utils.transfer_weights_from_nearest_vertex import (
     transfer_weights_from_nearest_vertex,
 )
-from io_utils.import_base_fbx import import_base_fbx
+from io_utils.file_io import import_base_fbx
 from io_utils.load_vertex_group import load_vertex_group
 
 

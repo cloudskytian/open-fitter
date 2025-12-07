@@ -14,7 +14,7 @@ for _p in (_PARENT_DIR,):
 from blender_utils.process_clothing_avatar import process_clothing_avatar
 from common_utils.rename_shape_keys_from_mappings import rename_shape_keys_from_mappings
 from common_utils.truncate_long_shape_key_names import truncate_long_shape_key_names
-from io_utils.load_base_file import load_base_file
+from io_utils.file_io import load_base_file
 from io_utils.load_cloth_metadata import load_cloth_metadata
 from io_utils.load_mesh_material_data import load_mesh_material_data
 from process_base_avatar import process_base_avatar

@@ -30,3 +30,14 @@ def save_pose_state(armature_obj: bpy.types.Object) -> dict:
         }
     
     return pose_state
+
+
+def store_pose_globally(armature_obj: bpy.types.Object) -> None:
+    """
+    グローバル変数にポーズ状態を保存する
+    
+    Parameters:
+        armature_obj: アーマチュアオブジェクト
+    """
+    global _saved_pose_state
+    _saved_pose_state = save_pose_state(armature_obj)

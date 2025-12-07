@@ -11,7 +11,20 @@ from stages.template_adjustment import TemplateAdjustmentStage
 from stages.weight_transfer import WeightTransferStage
 
 
-class SingleConfigProcessor:
+class ClothingRetargetPipeline:
+    """衣装リターゲティングパイプライン
+    
+    ベースアバターから衣装メッシュへウェイト・形状・ポーズを転送し、
+    最終的なFBXファイルを出力する。
+    
+    Stages:
+        1. AssetPreparation: アセット読み込み・初期化
+        2. TemplateAdjustment: Template固有補正（条件付き）
+        3. MeshPreparation: メッシュ変形・サイクル1
+        4. WeightTransfer: ウェイト転送・サイクル2
+        5. SceneFinalization: 仕上げ・FBXエクスポート
+    """
+    
     # ProcessingContextに委譲する属性のリスト
     _CTX_ATTRS = frozenset({
         'base_mesh', 'base_armature', 'base_avatar_data',
@@ -33,12 +46,12 @@ class SingleConfigProcessor:
         object.__setattr__(self, 'ctx', ProcessingContext())
 
     def __getattr__(self, name):
-        if name in SingleConfigProcessor._CTX_ATTRS:
+        if name in ClothingRetargetPipeline._CTX_ATTRS:
             return getattr(self.ctx, name)
         raise AttributeError(f"'{type(self).__name__}' has no attribute '{name}'")
 
     def __setattr__(self, name, value):
-        if name in SingleConfigProcessor._CTX_ATTRS:
+        if name in ClothingRetargetPipeline._CTX_ATTRS:
             setattr(self.ctx, name, value)
         else:
             object.__setattr__(self, name, value)
@@ -90,6 +103,11 @@ class SingleConfigProcessor:
             return False
 
 
+# 後方互換性のためのエイリアス
+SingleConfigProcessor = ClothingRetargetPipeline
+
+
 def process_single_config(args, config_pair, pair_index, total_pairs, overall_start_time):
-    processor = SingleConfigProcessor(args, config_pair, pair_index, total_pairs, overall_start_time)
-    return processor.execute()
+    """後方互換性のためのラッパー関数。ClothingRetargetPipelineを直接使用することを推奨。"""
+    pipeline = ClothingRetargetPipeline(args, config_pair, pair_index, total_pairs, overall_start_time)
+    return pipeline.execute()

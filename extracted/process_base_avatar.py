@@ -5,8 +5,8 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from blender_utils.apply_blendshape_values import apply_blendshape_values
 from blender_utils.cleanup_base_objects import cleanup_base_objects
+from io_utils.avatar_data import load_avatar_data
 from io_utils.import_base_fbx import import_base_fbx
-from io_utils.load_avatar_data import load_avatar_data
 from set_humanoid_bone_inherit_scale import set_humanoid_bone_inherit_scale
 
 

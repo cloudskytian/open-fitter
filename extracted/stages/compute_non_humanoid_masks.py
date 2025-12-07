@@ -10,7 +10,7 @@ from collections import defaultdict
 import bpy
 import numpy as np
 from blender_utils.get_evaluated_mesh import get_evaluated_mesh
-from io_utils.store_weights import store_weights
+from io_utils.weights_io import store_weights
 from math_utils.create_distance_falloff_transfer_mask import (
     create_distance_falloff_transfer_mask,
 )

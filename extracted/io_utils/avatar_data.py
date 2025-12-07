@@ -1,8 +1,17 @@
-import os
-import sys
+"""
+アバターデータの読み込みユーティリティ
+"""
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import json
+
+
+def load_avatar_data(filepath: str) -> dict:
+    """Load and parse avatar data from JSON file."""
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        raise Exception(f"Failed to load avatar data: {str(e)}")
 
 
 def load_avatar_data_for_blendshape_analysis(avatar_data_path: str) -> dict:
@@ -13,7 +22,7 @@ def load_avatar_data_for_blendshape_analysis(avatar_data_path: str) -> dict:
         avatar_data_path: アバターデータファイルのパス
         
     Returns:
-        dict: アバターデータ
+        dict: アバターデータ（エラー時は空辞書）
     """
     try:
         with open(avatar_data_path, 'r', encoding='utf-8') as f:

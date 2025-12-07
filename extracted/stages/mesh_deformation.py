@@ -20,7 +20,7 @@ from blender_utils.process_bone_weight_consolidation import (
     process_bone_weight_consolidation,
 )
 from blender_utils.propagate_bone_weights import propagate_bone_weights
-from blender_utils.reset_shape_keys import reset_shape_keys
+from blender_utils.reset_utils import reset_shape_keys
 from blender_utils.subdivide_breast_faces import subdivide_breast_faces
 from blender_utils.subdivide_long_edges import subdivide_long_edges
 from blender_utils.triangulate_mesh import triangulate_mesh

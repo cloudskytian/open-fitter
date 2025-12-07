@@ -10,9 +10,9 @@ import bpy
 from algo_utils.get_humanoid_and_auxiliary_bone_groups import (
     get_humanoid_and_auxiliary_bone_groups,
 )
-from blender_utils.reset_bone_weights import reset_bone_weights
+from blender_utils.reset_utils import reset_bone_weights
 from create_side_weight_groups import create_side_weight_groups
-from io_utils.store_weights import store_weights
+from io_utils.weights_io import store_weights
 
 
 def prepare_groups_and_weights(context):

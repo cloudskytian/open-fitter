@@ -10,9 +10,7 @@ from algo_utils.get_blendshape_groups import get_blendshape_groups
 from blender_utils.process_single_blendshape_transition_set import (
     process_single_blendshape_transition_set,
 )
-from io_utils.load_avatar_data_for_blendshape_analysis import (
-    load_avatar_data_for_blendshape_analysis,
-)
+from io_utils.avatar_data import load_avatar_data_for_blendshape_analysis
 from misc_utils.get_deformation_fields_mapping import get_deformation_fields_mapping
 
 

@@ -1,7 +1,15 @@
-import os
-import sys
+"""
+シェイプキー・ボーンウェイトのリセットユーティリティ
+"""
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+def reset_shape_keys(obj):
+    """全シェイプキーの値を0にリセット（Basis以外）"""
+    if obj.data.shape_keys is not None:
+        for kb in obj.data.shape_keys.key_blocks:
+            if kb.name != "Basis":
+                kb.value = 0.0
+
 
 def reset_bone_weights(target_obj, bone_groups):
     """指定された頂点グループのウェイトを0に設定"""

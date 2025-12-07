@@ -4,7 +4,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import bpy
-from io_utils.load_avatar_data import load_avatar_data
+from io_utils.avatar_data import load_avatar_data
 
 
 def clear_humanoid_bone_relations_preserve_pose(armature_obj, clothing_avatar_data_filepath, base_avatar_data_filepath):

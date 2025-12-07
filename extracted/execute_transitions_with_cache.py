@@ -5,7 +5,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import numpy as np
 from blendshape_operation import apply_blendshape_operation_with_shape_key_name
-from blender_utils.create_blendshape_mask import create_blendshape_mask
+from blender_utils.blendshape_utils import create_blendshape_mask
 
 
 def execute_transitions_with_cache(deferred_transitions, transition_cache, target_obj, rigid_transformation=False):

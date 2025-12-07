@@ -1,7 +1,7 @@
 import os
 import sys
 
-from math_utils.calculate_blendshape_settings_difference import (
+from blender_utils.blendshape_utils import (
     calculate_blendshape_settings_difference,
 )
 from typing import Dict, Optional

@@ -8,7 +8,7 @@ import numpy as np
 from blender_utils.batch_process_vertices_with_custom_range import (
     batch_process_vertices_with_custom_range,
 )
-from blender_utils.create_blendshape_mask import create_blendshape_mask
+from blender_utils.blendshape_utils import create_blendshape_mask
 from blender_utils.get_armature_from_modifier import get_armature_from_modifier
 from math_utils.transform_utils import calculate_inverse_pose_matrix
 from mathutils import Matrix, Vector

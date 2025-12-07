@@ -6,8 +6,8 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from algo_utils.search_utils import (
     find_best_matching_target_settings,
 )
-from algo_utils.get_blendshape_groups import get_blendshape_groups
-from blender_utils.process_single_blendshape_transition_set import (
+from blender_utils.blendshape_utils import get_blendshape_groups
+from blender_utils.blendshape_utils import (
     process_single_blendshape_transition_set,
 )
 from io_utils.avatar_data import load_avatar_data_for_blendshape_analysis

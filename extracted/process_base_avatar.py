@@ -3,7 +3,7 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from blender_utils.apply_blendshape_values import apply_blendshape_values
+from blender_utils.blendshape_utils import apply_blendshape_values
 from blender_utils.base_object_utils import cleanup_base_objects
 from io_utils.avatar_data import load_avatar_data
 from io_utils.file_io import import_base_fbx

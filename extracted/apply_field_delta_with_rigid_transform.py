@@ -8,7 +8,7 @@ import numpy as np
 from apply_field_delta_with_rigid_transform_single import (
     apply_field_delta_with_rigid_transform_single,
 )
-from blender_utils.create_blendshape_mask import create_blendshape_mask
+from blender_utils.blendshape_utils import create_blendshape_mask
 from common_utils.get_source_label import get_source_label
 from execute_transitions_with_cache import execute_transitions_with_cache
 from io_utils.shape_key_state import restore_shape_key_state, save_shape_key_state

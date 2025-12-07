@@ -8,7 +8,7 @@ import numpy as np
 from blender_utils.batch_process_vertices_multi_step import (
     batch_process_vertices_multi_step,
 )
-from blender_utils.create_blendshape_mask import create_blendshape_mask
+from blender_utils.blendshape_utils import create_blendshape_mask
 from blender_utils.get_armature_from_modifier import get_armature_from_modifier
 from io_utils.shape_key_state import restore_shape_key_state, save_shape_key_state
 from math_utils.transform_utils import (

@@ -33,6 +33,7 @@ from stages.merge_added_groups import merge_added_groups
 from stages.run_distance_normal_smoothing import run_distance_normal_smoothing
 from stages.apply_distance_falloff_blend import apply_distance_falloff_blend
 from stages.restore_head_weights import restore_head_weights
+from stages.apply_metadata_fallback import apply_metadata_fallback
 
 
 class WeightTransferContext:
@@ -630,30 +631,7 @@ class WeightTransferContext:
         restore_head_weights(self)
 
     def apply_metadata_fallback(self):
-        metadata_time_start = time.time()
-        if self.cloth_metadata:
-            mesh_name = self.target_obj.name
-            if mesh_name in self.cloth_metadata:
-                vertex_max_distances = self.cloth_metadata[mesh_name]
-                print(f"  メッシュのクロスメタデータを処理: {mesh_name}")
-                count = 0
-                for vert_idx in range(len(self.target_obj.data.vertices)):
-                    max_distance = float(vertex_max_distances.get(str(vert_idx), 10.0))
-                    if max_distance > 1.0:
-                        if vert_idx in self.original_humanoid_weights:
-                            for group in self.target_obj.vertex_groups:
-                                if group.name in self.bone_groups:
-                                    try:
-                                        group.remove([vert_idx])
-                                    except RuntimeError:
-                                        continue
-                            for group_name, weight in self.original_humanoid_weights[vert_idx].items():
-                                if group_name in self.target_obj.vertex_groups:
-                                    self.target_obj.vertex_groups[group_name].add([vert_idx], weight, "REPLACE")
-                            count += 1
-                print(f"  処理された頂点数: {count}")
-        metadata_time = time.time() - metadata_time_start
-        print(f"  クロスメタデータ処理: {metadata_time:.2f}秒")
+        apply_metadata_fallback(self)
 
     def run(self):
         print(f"処理開始: {self.target_obj.name}")

@@ -12,7 +12,7 @@ for _p in (_PARENT_DIR,):
         sys.path.append(_p)
 
 from algo_utils.vertex_group_utils import remove_empty_vertex_groups
-from blender_utils.create_deformation_mask import create_deformation_mask
+from blender_utils.deformation_utils import create_deformation_mask
 from blender_utils.weight_processing_utils import (
     merge_auxiliary_to_humanoid_weights,
 )

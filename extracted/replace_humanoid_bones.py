@@ -31,7 +31,7 @@ from armature_bone_replacer import (
     update_children_parents,
 )
 from blender_utils.armature_utils import apply_pose_as_rest
-from blender_utils.inverse_bone_deform_all_vertices import (
+from blender_utils.deformation_utils import (
     inverse_bone_deform_all_vertices,
 )
 from bone_mapping_builder import BoneMappings, build_bone_mappings

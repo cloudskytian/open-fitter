@@ -5,7 +5,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import bpy
 import numpy as np
-from blender_utils.batch_process_vertices_multi_step import (
+from blender_utils.deformation_utils import (
     batch_process_vertices_multi_step,
 )
 from blender_utils.armature_utils import get_armature_from_modifier

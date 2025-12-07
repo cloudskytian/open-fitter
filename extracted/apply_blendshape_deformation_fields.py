@@ -5,7 +5,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import bpy
 import numpy as np
-from blender_utils.batch_process_vertices_with_custom_range import (
+from blender_utils.deformation_utils import (
     batch_process_vertices_with_custom_range,
 )
 from blender_utils.blendshape_utils import create_blendshape_mask

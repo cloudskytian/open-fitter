@@ -7,9 +7,11 @@ from processing_context import ProcessingContext
 from stages.asset_loading import AssetLoadingStage
 from stages.asset_normalization import AssetNormalizationStage
 from stages.blendshape_application import BlendShapeApplicationStage
+from stages.bone_replacement import BoneReplacementStage
+from stages.export_preparation import ExportPreparationStage
 from stages.mesh_deformation import MeshDeformationStage
 from stages.pose_application import PoseApplicationStage
-from stages.scene_finalization import SceneFinalizationStage
+from stages.pose_finalization import PoseFinalizationStage
 from stages.template_adjustment import TemplateAdjustmentStage
 from stages.weight_transfer_execution import WeightTransferExecutionStage
 from stages.weight_transfer_postprocess import WeightTransferPostProcessStage
@@ -32,7 +34,9 @@ class OutfitRetargetPipeline:
         7. WeightTransferPreparation: ウェイト転送準備
         8. WeightTransferExecution: ウェイト転送本体
         9. WeightTransferPostProcess: ウェイト転送後処理
-        10. SceneFinalization: 仕上げ・FBXエクスポート
+        10. PoseFinalization: ポーズ適用・変形の伝搬
+        11. BoneReplacement: ヒューマノイドボーン置換
+        12. ExportPreparation: エクスポート準備・FBX出力
     """
     
     # ProcessingContextに委譲する属性のリスト
@@ -45,6 +49,7 @@ class OutfitRetargetPipeline:
         'is_A_pose', 'blend_shape_labels',
         'base_weights_time', 'blendshape_time', 'pose_time',
         'cycle1_end_time', 'cycle2_post_end',
+        'propagated_end_time', 'bones_replace_time',
         'containing_objects', 'armature_settings_dict',
         'time_module', 'start_time'
     })
@@ -102,8 +107,12 @@ class OutfitRetargetPipeline:
             WeightTransferExecutionStage(self).run()
             # サイクル2: ウェイト転送後処理
             WeightTransferPostProcessStage(self).run()
-            # 最終仕上げとFBXエクスポート
-            SceneFinalizationStage(self).run()
+            # ポーズ適用・変形の伝搬
+            PoseFinalizationStage(self).run()
+            # ヒューマノイドボーン置換
+            BoneReplacementStage(self).run()
+            # エクスポート準備・FBX出力
+            ExportPreparationStage(self).run()
 
             total_time = time.time() - self.start_time
             print(f"Progress: {(self.pair_index + 1.0) / self.total_pairs * 0.9:.3f}")

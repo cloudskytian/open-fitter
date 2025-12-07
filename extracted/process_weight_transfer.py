@@ -34,6 +34,7 @@ from stages.run_distance_normal_smoothing import run_distance_normal_smoothing
 from stages.apply_distance_falloff_blend import apply_distance_falloff_blend
 from stages.restore_head_weights import restore_head_weights
 from stages.apply_metadata_fallback import apply_metadata_fallback
+from stages.compare_side_and_bone_weights import compare_side_and_bone_weights
 
 
 class WeightTransferContext:
@@ -584,42 +585,7 @@ class WeightTransferContext:
         print(f"  側面頂点へのウェイト伝播: {propagate_time:.2f}秒")
 
     def compare_side_and_bone_weights(self):
-        comparison_time_start = time.time()
-        side_left_group = self.target_obj.vertex_groups.get("LeftSideWeights")
-        side_right_group = self.target_obj.vertex_groups.get("RightSideWeights")
-        failed_vertices_count = 0
-        if side_left_group and side_right_group:
-            for vert in self.target_obj.data.vertices:
-                total_side_weight = 0.0
-                for g in vert.groups:
-                    if g.group == side_left_group.index or g.group == side_right_group.index:
-                        total_side_weight += g.weight
-                total_side_weight = min(total_side_weight, 1.0)
-                total_side_weight = total_side_weight - self.non_humanoid_total_weights[vert.index]
-                total_side_weight = max(total_side_weight, 0.0)
-
-                total_bone_weight = 0.0
-                for g in vert.groups:
-                    group_name = self.target_obj.vertex_groups[g.group].name
-                    if group_name in self.bone_groups:
-                        total_bone_weight += g.weight
-
-                if total_side_weight > total_bone_weight + 0.5:
-                    for group in self.target_obj.vertex_groups:
-                        if group.name in self.bone_groups:
-                            try:
-                                group.remove([vert.index])
-                            except RuntimeError:
-                                continue
-                    if vert.index in self.original_humanoid_weights:
-                        for group_name, weight in self.original_humanoid_weights[vert.index].items():
-                            if group_name in self.target_obj.vertex_groups:
-                                self.target_obj.vertex_groups[group_name].add([vert.index], weight, "REPLACE")
-                    failed_vertices_count += 1
-        if failed_vertices_count > 0:
-            print(f"  ウェイト転送失敗: {failed_vertices_count}頂点 -> オリジナルウェイトにフォールバック")
-        comparison_time = time.time() - comparison_time_start
-        print(f"  サイドウェイト比較調整: {comparison_time:.2f}秒")
+        compare_side_and_bone_weights(self)
 
     def run_distance_normal_smoothing(self):
         run_distance_normal_smoothing(self)

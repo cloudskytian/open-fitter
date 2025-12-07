@@ -11,11 +11,11 @@ from blender_utils.batch_process_vertices_multi_step import (
 from blender_utils.create_blendshape_mask import create_blendshape_mask
 from blender_utils.get_armature_from_modifier import get_armature_from_modifier
 from io_utils.shape_key_state import restore_shape_key_state, save_shape_key_state
-from math_utils.apply_similarity_transform_to_points import (
+from math_utils.transform_utils import (
     apply_similarity_transform_to_points,
 )
-from math_utils.calculate_inverse_pose_matrix import calculate_inverse_pose_matrix
-from math_utils.calculate_optimal_similarity_transform import (
+from math_utils.transform_utils import calculate_inverse_pose_matrix
+from math_utils.transform_utils import (
     calculate_optimal_similarity_transform,
 )
 from mathutils import Matrix, Vector

@@ -14,7 +14,7 @@ import bpy
 from algo_utils.find_humanoid_parent_in_hierarchy import (
     find_humanoid_parent_in_hierarchy,
 )
-from math_utils.copy_bone_transform import copy_bone_transform
+from math_utils.transform_utils import copy_bone_transform
 
 
 def collect_children_to_update(

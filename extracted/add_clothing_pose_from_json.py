@@ -13,7 +13,7 @@ from blender_utils.clear_humanoid_bone_relations_preserve_pose import (
 from blender_utils.bone_utils import get_humanoid_bone_hierarchy
 from io_utils.avatar_data import load_avatar_data
 from io_utils.pose_state import store_pose_globally
-from math_utils.list_to_matrix import list_to_matrix
+from math_utils.transform_utils import list_to_matrix
 
 
 def add_clothing_pose_from_json(armature_obj, pose_filepath="pose_data.json", init_pose_filepath="initial_pose.json", clothing_avatar_data_filepath="avatar_data.json", base_avatar_data_filepath="avatar_data.json", invert=False):

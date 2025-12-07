@@ -7,7 +7,7 @@ import json
 import bpy
 from algo_utils.find_nearest_parent_with_pose import find_nearest_parent_with_pose
 from blender_utils.bone_utils import get_humanoid_bone_hierarchy
-from math_utils.list_to_matrix import list_to_matrix
+from math_utils.transform_utils import list_to_matrix
 
 
 def add_pose_from_json(armature_obj, filepath, avatar_data, invert=False):

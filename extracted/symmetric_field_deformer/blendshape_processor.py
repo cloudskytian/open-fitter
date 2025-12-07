@@ -18,7 +18,7 @@ from blender_utils.create_blendshape_mask import create_blendshape_mask
 from blender_utils.get_armature_from_modifier import get_armature_from_modifier
 from common_utils.get_source_label import get_source_label
 from io_utils.shape_key_state import restore_shape_key_state, save_shape_key_state
-from math_utils.calculate_inverse_pose_matrix import calculate_inverse_pose_matrix
+from math_utils.transform_utils import calculate_inverse_pose_matrix
 from mathutils import Matrix, Vector
 from misc_utils.get_deformation_field_multi_step import get_deformation_field_multi_step
 from process_field_deformation import process_field_deformation

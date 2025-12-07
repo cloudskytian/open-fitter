@@ -4,7 +4,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import bpy
-from blender_utils.bone_side_utils import is_left_side_bone, is_right_side_bone
+from blender_utils.bone_utils import is_left_side_bone, is_right_side_bone
 
 
 def create_side_weight_groups(mesh_obj: bpy.types.Object, base_avatar_data: dict, clothing_armature: bpy.types.Object, clothing_avatar_data: dict) -> None:

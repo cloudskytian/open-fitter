@@ -12,7 +12,7 @@ from blender_utils.armature_modifier_utils import (
     set_armature_modifier_visibility,
     store_armature_modifier_settings,
 )
-from blender_utils.bone_side_utils import is_left_side_bone, is_right_side_bone
+from blender_utils.bone_utils import is_left_side_bone, is_right_side_bone
 
 
 def duplicate_mesh_with_partial_weights(base_mesh: bpy.types.Object, base_avatar_data: dict) -> tuple:

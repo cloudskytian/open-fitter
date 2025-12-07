@@ -7,7 +7,7 @@ import json
 import bpy
 from algo_utils.search_utils import find_nearest_parent_with_pose
 from apply_initial_pose_to_armature import apply_initial_pose_to_armature
-from blender_utils.clear_humanoid_bone_relations_preserve_pose import (
+from blender_utils.bone_utils import (
     clear_humanoid_bone_relations_preserve_pose,
 )
 from blender_utils.bone_utils import get_humanoid_bone_hierarchy

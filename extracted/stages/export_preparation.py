@@ -18,7 +18,7 @@ for _p in (_PARENT_DIR,):
 from blender_utils.merge_and_clean_generated_shapekeys import (
     merge_and_clean_generated_shapekeys,
 )
-from blender_utils.round_bone_coordinates import round_bone_coordinates
+from blender_utils.bone_utils import round_bone_coordinates
 from blender_utils.set_highheel_shapekey_values import set_highheel_shapekey_values
 from io_utils.file_io import export_fbx
 from misc_utils.update_cloth_metadata import update_cloth_metadata

@@ -4,7 +4,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import time
 
-from blender_utils.build_bone_maps import build_bone_maps
+from blender_utils.bone_utils import build_bone_maps
 from stages.adjust_hands_and_propagate import adjust_hands_and_propagate
 from stages.apply_distance_falloff_blend import apply_distance_falloff_blend
 from stages.apply_metadata_fallback import apply_metadata_fallback

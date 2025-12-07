@@ -6,6 +6,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import time
 
+
 def compare_side_and_bone_weights(context):
     comparison_time_start = time.time()
     side_left_group = context.target_obj.vertex_groups.get("LeftSideWeights")

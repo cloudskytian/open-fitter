@@ -5,28 +5,27 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import time
 
 from blender_utils.build_bone_maps import build_bone_maps
-from stages.compute_non_humanoid_masks import compute_non_humanoid_masks
-from stages.merge_added_groups import merge_added_groups
-from stages.run_distance_normal_smoothing import run_distance_normal_smoothing
-from stages.apply_distance_falloff_blend import apply_distance_falloff_blend
-from stages.restore_head_weights import restore_head_weights
-from stages.apply_metadata_fallback import apply_metadata_fallback
-from stages.compare_side_and_bone_weights import compare_side_and_bone_weights
-from stages.detect_finger_vertices import detect_finger_vertices
-from stages.create_closing_filter_mask import create_closing_filter_mask
-from stages.prepare_groups_and_weights import prepare_groups_and_weights
-from stages.attempt_weight_transfer import attempt_weight_transfer
-from stages.transfer_side_weights import transfer_side_weights
-from stages.smooth_and_cleanup import smooth_and_cleanup
-from stages.store_intermediate_results import store_intermediate_results
-from stages.blend_results import blend_results
 from stages.adjust_hands_and_propagate import adjust_hands_and_propagate
-from stages.process_mf_group import process_mf_group
+from stages.apply_distance_falloff_blend import apply_distance_falloff_blend
+from stages.apply_metadata_fallback import apply_metadata_fallback
+from stages.blend_results import blend_results
+from stages.compare_side_and_bone_weights import compare_side_and_bone_weights
+from stages.compute_non_humanoid_masks import compute_non_humanoid_masks
 from stages.constants import (
     FINGER_HUMANOID_BONES,
     LEFT_FOOT_FINGER_HUMANOID_BONES,
     RIGHT_FOOT_FINGER_HUMANOID_BONES,
 )
+from stages.create_closing_filter_mask import create_closing_filter_mask
+from stages.detect_finger_vertices import detect_finger_vertices
+from stages.merge_added_groups import merge_added_groups
+from stages.prepare_groups_and_weights import prepare_groups_and_weights
+from stages.process_mf_group import process_mf_group
+from stages.restore_head_weights import restore_head_weights
+from stages.run_distance_normal_smoothing import run_distance_normal_smoothing
+from stages.smooth_and_cleanup import smooth_and_cleanup
+from stages.store_intermediate_results import store_intermediate_results
+from stages.transfer_side_weights import transfer_side_weights
 
 
 class WeightTransferContext:

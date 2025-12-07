@@ -11,10 +11,10 @@ from typing import Optional
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import bpy
-from algo_utils.find_humanoid_parent_in_hierarchy import find_humanoid_parent_in_hierarchy
+from algo_utils.find_humanoid_parent_in_hierarchy import (
+    find_humanoid_parent_in_hierarchy,
+)
 from math_utils.copy_bone_transform import copy_bone_transform
-
-from bone_mapping_builder import BoneMappings
 
 
 def collect_children_to_update(

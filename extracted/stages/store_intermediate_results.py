@@ -6,6 +6,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import time
 
+
 def store_intermediate_results(context):
     store_result_a_time_start = time.time()
     for vert_idx in range(len(context.target_obj.data.vertices)):

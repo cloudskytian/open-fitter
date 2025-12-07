@@ -5,7 +5,9 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import time
+
 import bpy
+
 
 def smooth_and_cleanup(context):
     bpy.ops.object.mode_set(mode="EDIT")

@@ -6,6 +6,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import time
 
+
 def blend_results(context):
     weight_blend_time_start = time.time()
     for vert_idx in range(len(context.target_obj.data.vertices)):

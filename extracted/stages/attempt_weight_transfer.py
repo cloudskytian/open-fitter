@@ -8,11 +8,12 @@ import bpy
 from algo_utils.get_humanoid_and_auxiliary_bone_groups import (
     get_humanoid_and_auxiliary_bone_groups,
 )
-from io_utils.store_weights import store_weights
-from io_utils.restore_weights import restore_weights
 from create_distance_normal_based_vertex_group import (
     create_distance_normal_based_vertex_group,
 )
+from io_utils.restore_weights import restore_weights
+from io_utils.store_weights import store_weights
+
 
 def attempt_weight_transfer(context, source_obj, vertex_group, max_distance_try=0.2, max_distance_tried=0.0):
     bone_groups_tmp = get_humanoid_and_auxiliary_bone_groups(context.base_avatar_data)

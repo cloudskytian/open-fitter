@@ -5,10 +5,12 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import time
+
 import bpy
 from blender_utils.reset_bone_weights import reset_bone_weights
 from io_utils.restore_weights import restore_weights
 from stages.attempt_weight_transfer import attempt_weight_transfer
+
 
 def transfer_side_weights(context):
     left_transfer_time_start = time.time()

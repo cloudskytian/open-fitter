@@ -6,6 +6,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from blender_utils.create_blendshape_mask import create_blendshape_mask
 
+
 def create_closing_filter_mask(context):
     context.closing_filter_mask_weights = create_blendshape_mask(
         context.target_obj,

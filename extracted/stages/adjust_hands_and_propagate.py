@@ -5,10 +5,12 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import time
+
 from blender_utils.adjust_hand_weights import adjust_hand_weights
 from blender_utils.propagate_weights_to_side_vertices import (
     propagate_weights_to_side_vertices,
 )
+
 
 def adjust_hands_and_propagate(context):
     hand_weights_time_start = time.time()

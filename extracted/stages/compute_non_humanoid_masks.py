@@ -6,13 +6,16 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import time
 from collections import defaultdict
+
 import bpy
 import numpy as np
+from blender_utils.get_evaluated_mesh import get_evaluated_mesh
+from io_utils.store_weights import store_weights
+from math_utils.create_distance_falloff_transfer_mask import (
+    create_distance_falloff_transfer_mask,
+)
 from scipy.spatial import cKDTree
 
-from io_utils.store_weights import store_weights
-from blender_utils.get_evaluated_mesh import get_evaluated_mesh
-from math_utils.create_distance_falloff_transfer_mask import create_distance_falloff_transfer_mask
 
 def compute_non_humanoid_masks(context):
     context.new_groups = set(vg.name for vg in context.target_obj.vertex_groups)

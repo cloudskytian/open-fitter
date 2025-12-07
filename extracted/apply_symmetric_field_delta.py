@@ -10,17 +10,17 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from symmetric_field_deformer.context import SymmetricFieldDeformerContext
 from symmetric_field_deformer.basis_processor import process_basis_loop
 from symmetric_field_deformer.blendshape_processor import (
+    process_base_avatar_blendshapes,
+    process_clothing_blendshapes,
     process_config_blendshapes,
     process_skipped_transitions,
-    process_clothing_blendshapes,
-    process_base_avatar_blendshapes,
 )
+from symmetric_field_deformer.context import SymmetricFieldDeformerContext
 from symmetric_field_deformer.post_processor import (
-    execute_deferred_transitions,
     apply_masks_and_cleanup,
+    execute_deferred_transitions,
     finalize,
 )
 

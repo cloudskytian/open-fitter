@@ -6,11 +6,11 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import time
 from collections import deque
-import bmesh
-import bpy
 
+import bmesh
 from blender_utils.get_vertex_weight_safe import get_vertex_weight_safe
 from blender_utils.merge_weights_to_parent import merge_weights_to_parent
+
 
 def merge_added_groups(context):
     group_merge_time_start = time.time()

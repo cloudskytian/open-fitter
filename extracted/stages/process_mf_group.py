@@ -5,6 +5,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import math
+
 import bpy
 import mathutils
 from blender_utils.reset_bone_weights import reset_bone_weights
@@ -13,6 +14,7 @@ from io_utils.restore_weights import restore_weights
 from io_utils.save_shape_key_state import save_shape_key_state
 from io_utils.store_weights import store_weights
 from stages.attempt_weight_transfer import attempt_weight_transfer
+
 
 def process_mf_group(context, group_name, temp_shape_name, rotation_deg, humanoid_label_left, humanoid_label_right):
     target_group = context.target_obj.vertex_groups.get(group_name)

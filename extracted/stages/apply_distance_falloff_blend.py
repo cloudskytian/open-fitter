@@ -7,6 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import bpy
 import numpy as np
 
+
 def apply_distance_falloff_blend(context):
     current_mode = bpy.context.object.mode
     bpy.context.view_layer.objects.active = context.target_obj

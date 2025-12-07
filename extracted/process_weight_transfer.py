@@ -31,6 +31,7 @@ from io_utils.store_weights import store_weights
 from stages.compute_non_humanoid_masks import compute_non_humanoid_masks
 from stages.merge_added_groups import merge_added_groups
 from stages.run_distance_normal_smoothing import run_distance_normal_smoothing
+from stages.apply_distance_falloff_blend import apply_distance_falloff_blend
 
 
 class WeightTransferContext:
@@ -622,63 +623,7 @@ class WeightTransferContext:
         run_distance_normal_smoothing(self)
 
     def apply_distance_falloff_blend(self):
-        current_mode = bpy.context.object.mode
-        bpy.context.view_layer.objects.active = self.target_obj
-        bpy.ops.object.mode_set(mode="WEIGHT_PAINT")
-        self.target_obj.vertex_groups.active_index = self.distance_falloff_group2.index
-        print(f"  distance_falloff_group2: {self.distance_falloff_group2.index}")
-        print(f"  distance_falloff_group2_index: {self.target_obj.vertex_groups[self.distance_falloff_group2.name].index}")
-
-        humanoid_to_bone = {bone_map["humanoidBoneName"]: bone_map["boneName"] for bone_map in self.base_avatar_data["humanoidBones"]}
-        exclude_bone_groups = []
-        exclude_humanoid_bones = ["LeftBreast", "RightBreast"]
-        for humanoid_bone in exclude_humanoid_bones:
-            if humanoid_bone in humanoid_to_bone:
-                exclude_bone_groups.append(humanoid_to_bone[humanoid_bone])
-        for aux_set in self.base_avatar_data.get("auxiliaryBones", []):
-            if aux_set["humanoidBoneName"] in exclude_humanoid_bones:
-                exclude_bone_groups.extend(aux_set["auxiliaryBones"])
-
-        if exclude_bone_groups:
-            new_group_weights = np.zeros(len(self.target_obj.data.vertices), dtype=np.float32)
-            for i, vertex in enumerate(self.target_obj.data.vertices):
-                for group in vertex.groups:
-                    if group.group == self.distance_falloff_group2.index:
-                        new_group_weights[i] = group.weight
-                        break
-            total_target_weights = np.zeros(len(self.target_obj.data.vertices), dtype=np.float32)
-            for target_group_name in exclude_bone_groups:
-                if target_group_name in self.target_obj.vertex_groups:
-                    target_group = self.target_obj.vertex_groups[target_group_name]
-                    print(f"    頂点グループ '{target_group_name}' のウェイトを取得中...")
-                    for i, vertex in enumerate(self.target_obj.data.vertices):
-                        for group in vertex.groups:
-                            if group.group == target_group.index:
-                                total_target_weights[i] += group.weight
-                                break
-                else:
-                    print(f"    警告: 頂点グループ '{target_group_name}' が見つかりません")
-            masked_weights = np.maximum(new_group_weights, total_target_weights)
-            for i in range(len(self.target_obj.data.vertices)):
-                self.distance_falloff_group2.add([i], masked_weights[i], "REPLACE")
-
-        for vert_idx in range(len(self.target_obj.data.vertices)):
-            if vert_idx in self.original_humanoid_weights and self.non_humanoid_parts_mask[vert_idx] < 0.0001:
-                falloff_weight = 0.0
-                for g in self.target_obj.data.vertices[vert_idx].groups:
-                    if g.group == self.distance_falloff_group2.index:
-                        falloff_weight = g.weight
-                        break
-                for g in self.target_obj.data.vertices[vert_idx].groups:
-                    if self.target_obj.vertex_groups[g.group].name in self.bone_groups:
-                        weight = g.weight
-                        group_name = self.target_obj.vertex_groups[g.group].name
-                        self.target_obj.vertex_groups[group_name].add([vert_idx], weight * falloff_weight, "REPLACE")
-                for group_name, weight in self.original_humanoid_weights[vert_idx].items():
-                    if group_name in self.target_obj.vertex_groups:
-                        self.target_obj.vertex_groups[group_name].add([vert_idx], weight * (1.0 - falloff_weight), "ADD")
-
-        bpy.ops.object.mode_set(mode=current_mode)
+        apply_distance_falloff_blend(self)
 
     def restore_head_weights(self):
         head_time_start = time.time()

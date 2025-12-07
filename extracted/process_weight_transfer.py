@@ -15,6 +15,7 @@ from algo_utils.get_humanoid_and_auxiliary_bone_groups import (
 )
 from apply_distance_normal_based_smoothing import apply_distance_normal_based_smoothing
 from blender_utils.adjust_hand_weights import adjust_hand_weights
+from blender_utils.build_bone_maps import build_bone_maps
 from blender_utils.create_blendshape_mask import create_blendshape_mask
 from blender_utils.get_evaluated_mesh import get_evaluated_mesh
 from blender_utils.get_vertex_weight_safe import get_vertex_weight_safe
@@ -121,17 +122,14 @@ class WeightTransferContext:
         self.weights_a = {}
         self.weights_b = {}
 
-    def build_bone_maps(self):
-        for bone_map in self.base_avatar_data.get("humanoidBones", []):
-            if "humanoidBoneName" in bone_map and "boneName" in bone_map:
-                self.humanoid_to_bone[bone_map["humanoidBoneName"]] = bone_map["boneName"]
-                self.bone_to_humanoid[bone_map["boneName"]] = bone_map["humanoidBoneName"]
-
-        for aux_set in self.base_avatar_data.get("auxiliaryBones", []):
-            humanoid_bone = aux_set["humanoidBoneName"]
-            self.auxiliary_bones[humanoid_bone] = aux_set["auxiliaryBones"]
-            for aux_bone in aux_set["auxiliaryBones"]:
-                self.auxiliary_bones_to_humanoid[aux_bone] = humanoid_bone
+    def _build_bone_maps(self):
+        """ヒューマノイドボーンと補助ボーンのマッピングを構築する。"""
+        (
+            self.humanoid_to_bone,
+            self.bone_to_humanoid,
+            self.auxiliary_bones,
+            self.auxiliary_bones_to_humanoid,
+        ) = build_bone_maps(self.base_avatar_data)
 
     def detect_finger_vertices(self):
         for humanoid_bone in self.finger_humanoid_bones:
@@ -1230,7 +1228,7 @@ class WeightTransferContext:
 
     def run(self):
         print(f"処理開始: {self.target_obj.name}")
-        self.build_bone_maps()
+        self._build_bone_maps()
         self.detect_finger_vertices()
         self.create_closing_filter_mask()
         self.prepare_groups_and_weights()

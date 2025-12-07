@@ -19,7 +19,7 @@ from math_utils.geometry_utils import (
     calculate_optimal_similarity_transform,
 )
 from mathutils import Matrix, Vector
-from misc_utils.get_deformation_field_multi_step import get_deformation_field_multi_step
+from blender_utils.deformation_utils import get_deformation_field_multi_step
 
 
 def process_blendshape_fields_with_rigid_transform(obj, field_data_path, base_avatar_data, clothing_avatar_data, config_blend_shape_labels, influence_range=1.0, config_data=None):

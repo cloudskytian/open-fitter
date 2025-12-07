@@ -18,7 +18,7 @@ from math_utils.geometry_utils import (
     calculate_optimal_similarity_transform,
 )
 from mathutils import Matrix, Vector
-from misc_utils.get_deformation_field_multi_step import get_deformation_field_multi_step
+from blender_utils.deformation_utils import get_deformation_field_multi_step
 
 
 def apply_blendshape_operation(target_obj, operation, target_shape_key, rigid_transformation=False):

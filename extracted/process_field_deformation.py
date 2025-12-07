@@ -11,7 +11,7 @@ from blender_utils.deformation_utils import (
 from blender_utils.armature_utils import get_armature_from_modifier
 from math_utils.geometry_utils import calculate_inverse_pose_matrix
 from mathutils import Matrix, Vector
-from misc_utils.get_deformation_field_multi_step import get_deformation_field_multi_step
+from blender_utils.deformation_utils import get_deformation_field_multi_step
 
 
 def process_field_deformation(target_obj, field_data_path, blend_shape_labels=None, clothing_avatar_data=None, shape_key_name="SymmetricDeformed", ignore_blendshape=None, target_shape_key=None, base_shape_key=None):

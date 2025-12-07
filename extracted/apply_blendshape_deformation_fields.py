@@ -12,7 +12,7 @@ from blender_utils.blendshape_utils import create_blendshape_mask
 from blender_utils.armature_utils import get_armature_from_modifier
 from math_utils.geometry_utils import calculate_inverse_pose_matrix
 from mathutils import Matrix, Vector
-from misc_utils.get_deformation_field_multi_step import get_deformation_field_multi_step
+from blender_utils.deformation_utils import get_deformation_field_multi_step
 
 
 def apply_blendshape_deformation_fields(target_obj, field_data_path, blend_shape_labels=None, clothing_avatar_data=None, blend_shape_values=None):

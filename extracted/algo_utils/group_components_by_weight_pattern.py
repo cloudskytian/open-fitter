@@ -8,7 +8,7 @@ from dataclasses import dataclass
 import bmesh
 import bpy
 from algo_utils.find_connected_components import find_connected_components
-from algo_utils.get_humanoid_and_auxiliary_bone_groups import (
+from algo_utils.bone_group_utils import (
     get_humanoid_and_auxiliary_bone_groups,
 )
 from math_utils.obb_utils import calculate_obb_from_points

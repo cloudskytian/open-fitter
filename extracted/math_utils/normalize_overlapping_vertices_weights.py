@@ -6,7 +6,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from dataclasses import dataclass
 
 import bpy
-from algo_utils.get_humanoid_and_auxiliary_bone_groups import (
+from algo_utils.bone_group_utils import (
     get_humanoid_and_auxiliary_bone_groups,
 )
 from blender_utils.subdivision_utils import subdivide_selected_vertices

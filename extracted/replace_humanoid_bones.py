@@ -16,7 +16,7 @@ from add_pose_from_json import add_pose_from_json
 from algo_utils.find_humanoid_parent_in_hierarchy import (
     find_humanoid_parent_in_hierarchy,
 )
-from algo_utils.get_humanoid_and_auxiliary_bone_groups_with_intermediate import (
+from algo_utils.bone_group_utils import (
     get_humanoid_and_auxiliary_bone_groups_with_intermediate,
 )
 from armature_bone_replacer import (

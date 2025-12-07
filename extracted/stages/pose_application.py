@@ -12,7 +12,7 @@ for _p in (_PARENT_DIR,):
         sys.path.append(_p)
 
 from add_clothing_pose_from_json import add_clothing_pose_from_json
-from algo_utils.create_hinge_bone_group import create_hinge_bone_group
+from algo_utils.bone_group_utils import create_hinge_bone_group
 from blender_utils.create_overlapping_vertices_attributes import (
     create_overlapping_vertices_attributes,
 )

@@ -3,8 +3,106 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+from blender_utils.get_evaluated_mesh import get_evaluated_mesh
+from scipy.spatial import cKDTree
 import bpy
+import numpy as np
+import os
+import sys
 
+
+# Merged from get_humanoid_and_auxiliary_bone_groups.py
+
+def get_humanoid_and_auxiliary_bone_groups(base_avatar_data):
+    """HumanoidボーンとAuxiliaryボーンの頂点グループを取得"""
+    bone_groups = set()
+    
+    # Humanoidボーンを追加
+    for bone_map in base_avatar_data.get("humanoidBones", []):
+        if "boneName" in bone_map:
+            bone_groups.add(bone_map["boneName"])
+    
+    # Auxiliaryボーンを追加
+    for aux_set in base_avatar_data.get("auxiliaryBones", []):
+        for aux_bone in aux_set.get("auxiliaryBones", []):
+            bone_groups.add(aux_bone)
+            
+    return bone_groups
+
+# Merged from get_deformation_bone_groups.py
+
+def get_deformation_bone_groups(avatar_data: dict) -> list:
+    """
+    Get list of bone groups for deformation mask from avatar data,
+    excluding Head and its auxiliary bones.
+    
+    Parameters:
+        avatar_data: Avatar data containing bone information
+        
+    Returns:
+        List of bone names for deformation mask
+    """
+    bone_groups = set()
+    
+    # Get mapping of humanoid bones
+    for bone_map in avatar_data.get("humanoidBones", []):
+        if "humanoidBoneName" in bone_map and "boneName" in bone_map:
+            # Skip Head bone
+            if bone_map["humanoidBoneName"] != "Head":
+                bone_groups.add(bone_map["boneName"])
+    
+    # Get auxiliary bones mapping
+    for aux_set in avatar_data.get("auxiliaryBones", []):
+        humanoid_bone = aux_set["humanoidBoneName"]
+        # Skip Head's auxiliary bones
+        if humanoid_bone != "Head":
+            aux_bones = aux_set["auxiliaryBones"]
+            bone_groups.update(aux_bones)
+    
+    return sorted(list(bone_groups))
+
+# Merged from create_hinge_bone_group.py
+
+def create_hinge_bone_group(obj: bpy.types.Object, armature: bpy.types.Object, avatar_data: dict) -> None:
+    """
+    Create a hinge bone group.
+    """
+    bone_groups = get_humanoid_and_auxiliary_bone_groups(avatar_data)
+
+    # 衣装アーマチュアのボーングループも含めた対象グループを作成
+    all_deform_groups = set(bone_groups)
+    if armature:
+        all_deform_groups.update(bone.name for bone in armature.data.bones)
+
+    # original_groupsからbone_groupsを除いたグループのウェイトを保存
+    original_non_humanoid_groups = all_deform_groups - bone_groups
+
+    cloth_bm = get_evaluated_mesh(obj)
+    cloth_bm.verts.ensure_lookup_table()
+    cloth_bm.faces.ensure_lookup_table()
+    vertex_coords = np.array([v.co for v in cloth_bm.verts])
+    kdtree = cKDTree(vertex_coords)
+
+    hinge_bone_group = obj.vertex_groups.new(name="HingeBone")
+    for bone_name in original_non_humanoid_groups:
+        bone = armature.pose.bones.get(bone_name)
+        if bone.parent and bone.parent.name in bone_groups:
+            group_index = obj.vertex_groups.find(bone_name)
+            print(f"Processing hinge bone: {bone_name}")
+            print(f"Bone parent: {bone.parent.name}")
+            print(f"Group index: {group_index}")
+            if group_index != -1:
+                bone_head = armature.matrix_world @ bone.head
+                neighbor_indices = kdtree.query_ball_point(bone_head, 0.01)
+                for index in neighbor_indices:
+                    for g in obj.data.vertices[index].groups:
+                        if g.group == group_index:
+                            weight = g.weight
+                            hinge_bone_group.add([index], weight, 'REPLACE')
+                            print(f"Added weight to {index}")
+                            break
+
+# Merged from get_humanoid_and_auxiliary_bone_groups_with_intermediate.py
 
 def get_humanoid_and_auxiliary_bone_groups_with_intermediate(base_armature: bpy.types.Object, base_avatar_data: dict) -> set:
     bone_groups = set()

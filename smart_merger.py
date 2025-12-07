@@ -35,32 +35,23 @@ def split_imports_and_body(code):
     imports = []
     body = []
     
-    # Simple heuristic: imports are usually at the top
-    # We'll collect all lines starting with 'import' or 'from' 
-    # that are not inside a function/class (indentation 0)
-    
-    # Better approach: Use AST to find import nodes, but we need to preserve comments and formatting
-    # So we'll use a line-based approach with some smarts
-    
     in_docstring = False
+    in_import = False
+    paren_depth = 0
+    current_import = []
     
     for line in lines:
         stripped = line.strip()
-        if not stripped:
-            if imports and not body: # Empty line after imports
-                continue
-            if body:
-                body.append(line)
-            continue
-            
+        
+        # Handle docstrings
         if stripped.startswith('"""') or stripped.startswith("'''"):
             if stripped.count('"""') == 2 or stripped.count("'''") == 2:
-                pass # Single line docstring
+                pass 
             else:
                 in_docstring = not in_docstring
             
-            if not imports and not body: # File docstring
-                continue # Skip file docstring for child modules
+            if not imports and not body and not in_import: # File docstring
+                continue 
             
             body.append(line)
             continue
@@ -69,14 +60,39 @@ def split_imports_and_body(code):
             body.append(line)
             continue
             
-        # Check for sys.path hacks common in this project
+        # Skip empty lines if we haven't started body yet
+        if not stripped and not in_import:
+            if imports and not body:
+                continue
+            if body:
+                body.append(line)
+            continue
+
+        # Check for sys.path hacks
         if 'sys.path.append' in line or 'os.path.dirname' in line:
-            continue # Skip path setup lines
-            
-        if (stripped.startswith('import ') or stripped.startswith('from ')) and not line.startswith(' '):
-            imports.append(line)
+            continue 
+
+        # Import detection logic
+        if in_import:
+            current_import.append(line)
+            paren_depth += line.count('(') - line.count(')')
+            if paren_depth <= 0 and not stripped.endswith('\\'):
+                in_import = False
+                paren_depth = 0
+                imports.append("\n".join(current_import))
+                current_import = []
         else:
-            body.append(line)
+            # Start of new import?
+            if (stripped.startswith('import ') or stripped.startswith('from ')) and not line.startswith(' '):
+                current_import = [line]
+                paren_depth += line.count('(') - line.count(')')
+                if paren_depth > 0 or stripped.endswith('\\'):
+                    in_import = True
+                else:
+                    imports.append(line)
+                    current_import = []
+            else:
+                body.append(line)
             
     return imports, "\n".join(body)
 

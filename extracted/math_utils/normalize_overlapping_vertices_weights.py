@@ -9,7 +9,7 @@ import bpy
 from algo_utils.get_humanoid_and_auxiliary_bone_groups import (
     get_humanoid_and_auxiliary_bone_groups,
 )
-from blender_utils.subdivide_selected_vertices import subdivide_selected_vertices
+from blender_utils.subdivision_utils import subdivide_selected_vertices
 from mathutils import Vector
 
 

@@ -5,7 +5,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import bpy
 from algo_utils.merge_vertex_group_weights import merge_vertex_group_weights
-from blender_utils.get_bone_name_from_humanoid import get_bone_name_from_humanoid
+from blender_utils.bone_utils import get_bone_name_from_humanoid
 
 
 def process_bone_weight_consolidation(mesh_obj: bpy.types.Object, avatar_data: dict) -> None:

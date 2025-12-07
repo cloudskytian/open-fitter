@@ -4,7 +4,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import numpy as np
-from blender_utils.get_child_bones_recursive import get_child_bones_recursive
+from blender_utils.bone_utils import get_child_bones_recursive
 
 
 def create_blendshape_mask(target_obj, mask_bones, clothing_avatar_data, field_name="", store_debug_mask=True):

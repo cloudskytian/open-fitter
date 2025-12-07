@@ -4,7 +4,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import bpy
-from blender_utils.get_humanoid_bone_hierarchy import get_humanoid_bone_hierarchy
+from blender_utils.bone_utils import get_humanoid_bone_hierarchy
 
 
 def set_humanoid_bone_inherit_scale(armature_obj: bpy.types.Object, avatar_data: dict) -> None:

@@ -10,7 +10,7 @@ from apply_initial_pose_to_armature import apply_initial_pose_to_armature
 from blender_utils.clear_humanoid_bone_relations_preserve_pose import (
     clear_humanoid_bone_relations_preserve_pose,
 )
-from blender_utils.get_humanoid_bone_hierarchy import get_humanoid_bone_hierarchy
+from blender_utils.bone_utils import get_humanoid_bone_hierarchy
 from io_utils.avatar_data import load_avatar_data
 from io_utils.pose_state import store_pose_globally
 from math_utils.list_to_matrix import list_to_matrix

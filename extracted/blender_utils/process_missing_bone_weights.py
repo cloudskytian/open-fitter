@@ -4,7 +4,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import bpy
-from blender_utils.get_bone_parent_map import get_bone_parent_map
+from blender_utils.bone_utils import get_bone_parent_map
 from blender_utils.merge_weights_to_parent import merge_weights_to_parent
 
 

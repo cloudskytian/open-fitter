@@ -5,7 +5,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import bpy
 import numpy as np
-from blender_utils.get_deformation_bones import get_deformation_bones
+from blender_utils.bone_utils import get_deformation_bones
 from mathutils import Matrix, Vector
 from misc_utils.get_deformation_field_multi_step import get_deformation_field_multi_step
 from scipy.spatial import cKDTree

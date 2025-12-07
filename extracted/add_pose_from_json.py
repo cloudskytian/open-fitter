@@ -6,7 +6,7 @@ import json
 
 import bpy
 from algo_utils.find_nearest_parent_with_pose import find_nearest_parent_with_pose
-from blender_utils.get_humanoid_bone_hierarchy import get_humanoid_bone_hierarchy
+from blender_utils.bone_utils import get_humanoid_bone_hierarchy
 from math_utils.list_to_matrix import list_to_matrix
 
 

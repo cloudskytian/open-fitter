@@ -16,20 +16,22 @@ def parse_args():
     parser.add_argument('--input', required=True, help='Input clothing FBX file path')
     parser.add_argument('--output', required=True, help='Output FBX file path')
     parser.add_argument('--base', required=True, help='Base Blender file path')
-    parser.add_argument('--base-fbx', required=True, help='Comma-separated list of base avatar FBX file paths')
-    parser.add_argument('--config', required=True, help='Comma-separated list of config file paths')
+    parser.add_argument('--base-fbx', required=True, help='Semicolon-separated list of base avatar FBX file paths')
+    parser.add_argument('--config', required=True, help='Semicolon-separated list of config file paths')
     parser.add_argument('--hips-position', type=str, help='Target Hips bone world position (x,y,z format)')
-    parser.add_argument('--blend-shapes', type=str, help='Comma-separated list of blend shape labels to apply')
+    parser.add_argument('--blend-shapes', type=str, help='Semicolon-separated list of blend shape labels to apply')
     parser.add_argument('--cloth-metadata', type=str, help='Path to cloth metadata JSON file')
     parser.add_argument('--mesh-material-data', type=str, help='Path to mesh material data JSON file')
     parser.add_argument('--init-pose', required=True, help='Initial pose data JSON file path')
-    parser.add_argument('--target-meshes', required=False, help='Comma-separated list of mesh names to process')
+    parser.add_argument('--target-meshes', required=False, help='Semicolon-separated list of mesh names to process')
     parser.add_argument('--no-subdivision', action='store_true', help='Disable subdivision during DeformationField deformation')
     parser.add_argument('--no-triangle', action='store_true', help='Disable mesh triangulation')
-    parser.add_argument('--blend-shape-values', type=str, help='Comma-separated list of float values for blend shape intensities')
+    parser.add_argument('--blend-shape-values', type=str, help='Semicolon-separated list of float values for blend shape intensities')
     parser.add_argument('--blend-shape-mappings', type=str, help='Semicolon-separated mappings of label,customName pairs')
     parser.add_argument('--name-conv', type=str, help='Path to bone name conversion JSON file')
     parser.add_argument('--mesh-renderers', type=str, help='Semicolon-separated list of meshObject,parentObject pairs')
+    
+    print(sys.argv)
     
 
     # Get all args after "--"
@@ -40,13 +42,13 @@ def parse_args():
         
     args = parser.parse_args(argv[argv.index("--") + 1:])
     
-    # Parse comma-separated base-fbx and config paths
-    base_fbx_paths = [path.strip() for path in args.base_fbx.split(',')]
-    config_paths = [path.strip() for path in args.config.split(',')]
+    # Parse semicolon-separated base-fbx and config paths
+    base_fbx_paths = [path.strip() for path in args.base_fbx.split(';')]
+    config_paths = [path.strip() for path in args.config.split(';')]
     
     # Validate that base-fbx and config have the same number of entries
     if len(base_fbx_paths) != len(config_paths):
-        print(f"[Error] Number of base-fbx files ({len(base_fbx_paths)}) must match number of config files ({len(config_paths)})")
+        print(f"Error: Number of base-fbx files ({len(base_fbx_paths)}) must match number of config files ({len(config_paths)})")
         sys.exit(1)
     
     # Validate basic file paths
@@ -56,16 +58,19 @@ def parse_args():
     ]
     for path in required_paths:
         if not os.path.exists(path):
+            print(f"Error: File not found: {path}")
             sys.exit(1)
     
     # Validate all base-fbx files exist
     for path in base_fbx_paths:
         if not os.path.exists(path):
+            print(f"Error: Base FBX file not found: {path}")
             sys.exit(1)
     
     # Validate all config files exist
     for path in config_paths:
         if not os.path.exists(path):
+            print(f"Error: Config file not found: {path}")
             sys.exit(1)
     
     # Process each config file and create configuration pairs
@@ -119,12 +124,16 @@ def parse_args():
             clothing_avatar_data_path = config_data.get('clothingAvatarDataPath')
             
             if not pose_data_path:
+                print(f"Error: poseDataPath not found in config file: {config_path}")
                 sys.exit(1)
             if not field_data_path:
+                print(f"Error: fieldDataPath not found in config file: {config_path}")
                 sys.exit(1)
             if not base_avatar_data_path:
+                print(f"Error: baseAvatarDataPath not found in config file: {config_path}")
                 sys.exit(1)
             if not clothing_avatar_data_path:
+                print(f"Error: clothingAvatarDataPath not found in config file: {config_path}")
                 sys.exit(1)
             
             # Convert relative paths to absolute paths
@@ -139,16 +148,16 @@ def parse_args():
             
             # Validate avatar data paths
             if not os.path.exists(pose_data_path):
-                print(f"[Error] Pose data file not found: {pose_data_path} (from config {config_path})")
+                print(f"Error: Pose data file not found: {pose_data_path} (from config {config_path})")
                 sys.exit(1)
             if not os.path.exists(field_data_path):
-                print(f"[Error] Field data file not found: {field_data_path} (from config {config_path})")
+                print(f"Error: Field data file not found: {field_data_path} (from config {config_path})")
                 sys.exit(1)
             if not os.path.exists(base_avatar_data_path):
-                print(f"[Error] Base avatar data file not found: {base_avatar_data_path} (from config {config_path})")
+                print(f"Error: Base avatar data file not found: {base_avatar_data_path} (from config {config_path})")
                 sys.exit(1)
             if not os.path.exists(clothing_avatar_data_path):
-                print(f"[Error] Clothing avatar data file not found: {clothing_avatar_data_path} (from config {config_path})")
+                print(f"Error: Clothing avatar data file not found: {clothing_avatar_data_path} (from config {config_path})")
                 sys.exit(1)
             
             hips_position = None
@@ -158,19 +167,20 @@ def parse_args():
             blend_shape_values = None
             blend_shape_mappings = None
             mesh_renderers = None
-            input_clothing_fbx_path = args.output;
+            input_clothing_fbx_path = args.output
             if i == 0:
                 if args.hips_position:
                     x, y, z = map(float, args.hips_position.split(','))
                     hips_position = Vector((x, y, z))
-                target_meshes = args.target_meshes;
-                init_pose = args.init_pose;
-                blend_shapes = args.blend_shapes;
+                target_meshes = args.target_meshes
+                init_pose = args.init_pose
+                blend_shapes = args.blend_shapes
                 # Parse blend shape values if provided
                 if args.blend_shape_values:
                     try:
-                        blend_shape_values = [float(v.strip()) for v in args.blend_shape_values.split(',')]
+                        blend_shape_values = [float(v.strip()) for v in args.blend_shape_values.split(';')]
                     except ValueError as e:
+                        print(f"Error: Invalid blend shape values format: {e}")
                         sys.exit(1)
                 # Parse blend shape mappings if provided
                 if args.blend_shape_mappings:
@@ -182,6 +192,7 @@ def parse_args():
                                 label, custom_name = pair.split(',', 1)
                                 blend_shape_mappings[label.strip()] = custom_name.strip()
                     except ValueError as e:
+                        print(f"Error: Invalid blend shape mappings format: {e}")
                         sys.exit(1)
                 # Parse mesh renderers if provided
                 if args.mesh_renderers:
@@ -192,15 +203,17 @@ def parse_args():
                             if pair.strip():
                                 mesh_name, parent_name = pair.split(':', 1)
                                 mesh_renderers[mesh_name.strip()] = parent_name.strip()
+                        print(f"Parsed mesh renderers: {mesh_renderers}")
                     except ValueError as e:
+                        print(f"Error: Invalid mesh renderers format: {e}")
                         sys.exit(1)
-                input_clothing_fbx_path = args.input;
+                input_clothing_fbx_path = args.input
             
-            skip_blend_shape_generation = True;
+            skip_blend_shape_generation = True
             if i == len(config_paths) - 1:
-                skip_blend_shape_generation = False;
+                skip_blend_shape_generation = False
 
-            do_not_use_base_pose = config_data.get('doNotUseBasePose', 0);
+            do_not_use_base_pose = config_data.get('doNotUseBasePose', 0)
             
             # Create configuration pair
             config_pair = {
@@ -225,8 +238,10 @@ def parse_args():
             config_pairs.append(config_pair)
             
         except json.JSONDecodeError as e:
+            print(f"Error: Invalid JSON in config file {config_path}: {e}")
             sys.exit(1)
         except Exception as e:
+            print(f"Error reading config file {config_path}: {e}")
             sys.exit(1)
     
     # Process BlendShape transitions for consecutive config pairs
@@ -241,7 +256,7 @@ def parse_args():
         for i in range(len(config_pairs) - 1):
             config_pairs[i]['base_fbx'] = None
     
-    # Store configuration pairs in args for later use (後方互換性)
+    # Store configuration pairs in args for later use
     args.config_pairs = config_pairs
             
     # Parse hips position if provided
@@ -250,8 +265,7 @@ def parse_args():
             x, y, z = map(float, args.hips_position.split(','))
             args.hips_position = Vector((x, y, z))
         except:
-            print("[Error] Invalid hips position format. Use x,y,z")
+            print("Error: Invalid hips position format. Use x,y,z")
             sys.exit(1)
-    
-    # 新アーキテクチャ: (args, config_pairs)を返す
+            
     return args, config_pairs

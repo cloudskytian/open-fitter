@@ -1,10 +1,14 @@
-# すべてを無視する（デフォルト）
+# すべてを無視する（デフォルト！E
 /*
 
-# ルート直下のpyファイルは追跡対象
+# extracted/ �f�B���N�g���͒ǐՑΏ�
+!/extracted/
+!/extracted/**
+
+# ルート直下�Epyファイルは追跡対象
 !/*.py
 
-# UnityProjectディレクトリは基本無視だが、一部追跡
+# UnityProjectチE��レクトリは基本無視だが、一部追跡
 !/UnityProject/
 /UnityProject/*
 
@@ -20,10 +24,10 @@
 !/UnityProject/Assets/OpenFitter/Scripts/
 !/UnityProject/Assets/OpenFitter/Scripts/**/*.cs
 
-# .gitignore自体は追跡対象
+# .gitignore自体�E追跡対象
 !.gitignore
 
-# README等のドキュメントがあれば追跡対象にする場合
+# README等�Eドキュメントがあれば追跡対象にする場吁E
 !/LICENSE
 !/README.md
 #! Allow tracking of GPL core directory
@@ -40,3 +44,6 @@ Original.py
 
 # Ignore extracted scripts
 /src/upstream/extracted/
+
+# Generated documents
+generated_documents/

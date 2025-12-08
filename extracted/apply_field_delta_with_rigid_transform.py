@@ -1,0 +1,342 @@
+import os
+import sys
+
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+import bpy
+import numpy as np
+from apply_field_delta_with_rigid_transform_single import (
+    apply_field_delta_with_rigid_transform_single,
+)
+from blender_utils.blendshape_utils import create_blendshape_mask
+from common_utils.get_source_label import get_source_label
+from execute_transitions_with_cache import execute_transitions_with_cache
+from io_utils.io_utils import restore_shape_key_state, save_shape_key_state
+from blender_utils.blendshape_utils import TransitionCache
+
+
+def apply_field_delta_with_rigid_transform(obj, field_data_path, blend_shape_labels=None, base_avatar_data=None, clothing_avatar_data=None, shape_key_name="RigidTransformed", influence_range=1.0, config_data=None, overwrite_base_shape_key=True):
+    """
+    保存された対称Deformation Field差分データを読み込み、最適な剛体変換として適用する（多段階対応）
+    
+    Parameters:
+        obj: 対象メッシュオブジェクト
+        field_data_path: Deformation Fieldのパス
+        blend_shape_labels: 適用するブレンドシェイプのラベルリスト（オプション）
+        base_avatar_data: ベースアバターデータ（オプション）
+        clothing_avatar_data: 衣装アバターデータ（オプション）
+        shape_key_name: 作成するシェイプキーの名前
+        influence_range: DistanceWeight頂点グループによる影響度の範囲（0.0-1.0、デフォルト0.5）
+        
+    Returns:
+        シェイプキー
+    """
+    # Transitionキャッシュを初期化
+    transition_cache = TransitionCache()
+    deferred_transitions = []  # 遅延実行するTransitionのリスト
+    
+    original_shape_key_state = save_shape_key_state(obj)
+
+    if obj.data.shape_keys:
+        for sk in obj.data.shape_keys.key_blocks:
+            sk.value = 0.0
+        
+    basis_field_path = os.path.join(os.path.dirname(field_data_path), field_data_path)
+    shape_key = apply_field_delta_with_rigid_transform_single(obj, basis_field_path, blend_shape_labels, clothing_avatar_data, shape_key_name)
+    
+    # Basis遷移を遅延実行リストに追加
+    if config_data:
+        deferred_transitions.append({
+            'target_obj': obj,
+            'config_data': config_data,
+            'target_label': 'Basis',
+            'target_shape_key_name': shape_key_name,
+            'base_avatar_data': base_avatar_data,
+            'clothing_avatar_data': clothing_avatar_data,
+            'base_avatar_data': base_avatar_data,
+            'save_original_shape_key': True
+        })
+    
+    restore_shape_key_state(obj, original_shape_key_state)
+    
+    # configファイルのblendShapeFieldsを処理するためのラベルセットを作成
+    config_blend_shape_labels = set()
+    config_generated_shape_keys = {}  # 後続処理の対象外にするシェイプキー名を保存
+    non_relative_shape_keys = set() # 相対的な変位を持たないシェイプキー名を保存
+
+    skipped_shape_keys = set()
+    label_to_target_shape_key_name = {'Basis': shape_key_name}
+    
+    # 1. configファイルのblendShapeFieldsを先に処理
+    if config_data and "blendShapeFields" in config_data:
+        
+        for blend_field in config_data["blendShapeFields"]:
+            label = blend_field["label"]
+            source_label = blend_field["sourceLabel"]
+            field_path = os.path.join(os.path.dirname(field_data_path), blend_field["path"])
+
+            source_blend_shape_settings = blend_field.get("sourceBlendShapeSettings", [])
+
+            if (blend_shape_labels is None or source_label not in blend_shape_labels) and source_label not in obj.data.shape_keys.key_blocks:
+                skipped_shape_keys.add(label)
+                continue
+            
+            # マスクウェイトを取得
+            mask_bones = blend_field.get("maskBones", [])
+            mask_weights = None
+            if mask_bones:
+                mask_weights = create_blendshape_mask(obj, mask_bones, clothing_avatar_data, field_name=label, store_debug_mask=True)
+            
+            if mask_weights is not None and np.all(mask_weights == 0):
+                continue
+            
+            # 対象メッシュオブジェクトの元のシェイプキー設定を保存
+            original_shape_key_state = save_shape_key_state(obj)
+            
+            # すべてのシェイプキーの値を0にする
+            if obj.data.shape_keys:
+                for key_block in obj.data.shape_keys.key_blocks:
+                    key_block.value = 0.0
+            
+            # 最初のConfig Pairでの対象シェイプキー（1が前提）もしくは前のConfig PairでTransition後のシェイプキーの値を1にする
+            if clothing_avatar_data["name"] == "Template":
+                if obj.data.shape_keys:
+                    if source_label in obj.data.shape_keys.key_blocks:
+                        source_shape_key = obj.data.shape_keys.key_blocks.get(source_label)
+                        source_shape_key.value = 1.0
+                    else:
+                        temp_shape_key_name = f"{source_label}_temp"
+                        if temp_shape_key_name in obj.data.shape_keys.key_blocks:
+                            obj.data.shape_keys.key_blocks[temp_shape_key_name].value = 1.0
+            else:
+                # source_blend_shape_settingsを適用
+                for source_blend_shape_setting in source_blend_shape_settings:
+                    source_blend_shape_name = source_blend_shape_setting.get("name", "")
+                    source_blend_shape_value = source_blend_shape_setting.get("value", 0.0)
+                    if source_blend_shape_name in obj.data.shape_keys.key_blocks:
+                        source_blend_shape_key = obj.data.shape_keys.key_blocks.get(source_blend_shape_name)
+                        source_blend_shape_key.value = source_blend_shape_value
+                    else:
+                        temp_blend_shape_key_name = f"{source_blend_shape_name}_temp"
+                        if temp_blend_shape_key_name in obj.data.shape_keys.key_blocks:
+                            obj.data.shape_keys.key_blocks[temp_blend_shape_key_name].value = source_blend_shape_value
+            
+            # blend_shape_key_nameを設定（同名のシェイプキーがある場合は_generatedを付ける）
+            blend_shape_key_name = label
+            if obj.data.shape_keys and label in obj.data.shape_keys.key_blocks:
+                blend_shape_key_name = f"{label}_generated"
+
+            if os.path.exists(field_path):
+                generated_shape_key = apply_field_delta_with_rigid_transform_single(obj, field_path, blend_shape_labels, clothing_avatar_data, blend_shape_key_name)
+                
+                # 該当するラベルの遷移を遅延実行リストに追加
+                if config_data and generated_shape_key:
+                    deferred_transitions.append({
+                        'target_obj': obj,
+                        'config_data': config_data,
+                        'target_label': label,
+                        'target_shape_key_name': generated_shape_key.name,
+                        'base_avatar_data': base_avatar_data,
+                        'clothing_avatar_data': clothing_avatar_data,
+                        'base_avatar_data': base_avatar_data,
+                        'save_original_shape_key': False
+                    })
+                
+                # 生成されたシェイプキーの値を0にする
+                if generated_shape_key:
+                    generated_shape_key.value = 0.0
+                    config_generated_shape_keys[generated_shape_key.name] = mask_weights
+                    non_relative_shape_keys.add(generated_shape_key.name)
+                
+                config_blend_shape_labels.add(label)
+
+                label_to_target_shape_key_name[label] = generated_shape_key.name
+            # 元のシェイプキー設定を復元
+            restore_shape_key_state(obj, original_shape_key_state)
+    
+    # transition_setsに含まれるがconfig_blend_shape_labelsに含まれないシェイプキーに対して処理
+    if config_data and config_data.get('blend_shape_transition_sets', []):
+        
+        transition_sets = config_data.get('blend_shape_transition_sets', [])
+        for transition_set in transition_sets:
+            label = transition_set["label"]
+            if label in config_blend_shape_labels or label == 'Basis':
+                continue
+
+            source_label = get_source_label(label, config_data)
+            if source_label not in label_to_target_shape_key_name:
+                continue
+
+            # マスクウェイトを取得
+            mask_bones = transition_set.get("mask_bones", [])
+            mask_weights = None
+            if mask_bones:
+                mask_weights = create_blendshape_mask(obj, mask_bones, clothing_avatar_data, field_name=label, store_debug_mask=True)
+            
+            if mask_weights is not None and np.all(mask_weights == 0):
+                continue
+            
+            target_shape_key_name = label_to_target_shape_key_name[source_label]
+            target_shape_key = obj.data.shape_keys.key_blocks.get(target_shape_key_name)
+
+            if not target_shape_key:
+                continue
+
+            # target_shape_key_nameで指定されるシェイプキーのコピーを作成
+            blend_shape_key_name = label
+            if obj.data.shape_keys and label in obj.data.shape_keys.key_blocks:
+                blend_shape_key_name = f"{label}_generated"
+            
+            skipped_blend_shape_key = obj.shape_key_add(name=blend_shape_key_name)
+        
+            for i in range(len(skipped_blend_shape_key.data)):
+                skipped_blend_shape_key.data[i].co = target_shape_key.data[i].co.copy()
+
+            if config_data and skipped_blend_shape_key:
+                deferred_transitions.append({
+                    'target_obj': obj,
+                    'config_data': config_data,
+                    'target_label': label,
+                    'target_shape_key_name': skipped_blend_shape_key.name,
+                    'base_avatar_data': base_avatar_data,
+                    'clothing_avatar_data': clothing_avatar_data,
+                    'save_original_shape_key': False
+                })
+
+
+                config_generated_shape_keys[skipped_blend_shape_key.name] = mask_weights
+                non_relative_shape_keys.add(skipped_blend_shape_key.name)
+                config_blend_shape_labels.add(label)
+                label_to_target_shape_key_name[label] = skipped_blend_shape_key.name
+    
+
+    # 2. clothing_avatar_dataのblendshapesに含まれないシェイプキーに対して処理　(現在はコピーのみ行う)
+    if obj.data.shape_keys:
+        # clothing_avatar_dataからblendshapeのリストを作成
+        clothing_blendshapes = set()
+        if clothing_avatar_data and "blendshapes" in clothing_avatar_data:
+            for blendshape in clothing_avatar_data["blendshapes"]:
+                clothing_blendshapes.add(blendshape["name"])
+        
+        # 無限ループ回避のため事前にシェイプキーのリストを取得
+        current_shape_key_blocks = [key_block for key_block in obj.data.shape_keys.key_blocks]
+        
+        # 各シェイプキーについて処理
+        for key_block in current_shape_key_blocks:
+            if (key_block.name == "Basis" or 
+                key_block.name in clothing_blendshapes or 
+                key_block == shape_key or 
+                key_block.name.endswith("_BaseShape") or
+                key_block.name in config_generated_shape_keys.keys() or
+                key_block.name in config_blend_shape_labels or
+                key_block.name.endswith("_original") or 
+                key_block.name.endswith("_generated") or
+                key_block.name.endswith("_temp")):
+                continue  # Basisまたはclothing_avatar_dataのblendshapesに含まれるもの、または_BaseShapeで終わるもの、またはconfigで生成されたものはスキップ
+            
+            temp_blend_shape_key_name = f"{key_block.name}_generated"
+            if temp_blend_shape_key_name in obj.data.shape_keys.key_blocks:
+                temp_shape_key = obj.data.shape_keys.key_blocks[temp_blend_shape_key_name]
+            else:
+                temp_shape_key = obj.shape_key_add(name=temp_blend_shape_key_name)
+            for i, vertex in enumerate(temp_shape_key.data):
+                vertex.co = key_block.data[i].co.copy()
+    
+    # 遅延されたTransitionをキャッシュシステムと共に実行
+    created_shape_key_mask_weights = {}
+    shape_keys_to_remove = []
+    if deferred_transitions:
+        transition_operations, created_shape_key_mask_weights, used_shape_key_names = execute_transitions_with_cache(deferred_transitions, transition_cache, obj, rigid_transformation=True)
+        if used_shape_key_names:
+            for config_shape_key_name in config_generated_shape_keys:
+                if config_shape_key_name not in used_shape_key_names and config_shape_key_name in obj.data.shape_keys.key_blocks:
+                    shape_keys_to_remove.append(config_shape_key_name)
+    
+    for created_shape_key_name, mask_weights in created_shape_key_mask_weights.items():
+        if created_shape_key_name in obj.data.shape_keys.key_blocks:
+            config_generated_shape_keys[created_shape_key_name] = mask_weights
+            non_relative_shape_keys.add(created_shape_key_name)
+            config_blend_shape_labels.add(created_shape_key_name)
+            label_to_target_shape_key_name[created_shape_key_name] = created_shape_key_name
+    if overwrite_base_shape_key:
+        # base_avatar_dataのblendShapeFieldsを処理する前の準備
+        basis_name = 'Basis'
+        basis_index = obj.data.shape_keys.key_blocks.find(basis_name)
+
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.select_all(action='DESELECT')
+        bpy.context.view_layer.objects.active = obj
+        obj.select_set(True)
+        
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='SELECT')
+
+        for key_block in obj.data.shape_keys.key_blocks:
+            pass  # Auto-inserted
+        
+        original_shape_key_name = f"{shape_key_name}_original"
+        for sk in obj.data.shape_keys.key_blocks:
+            if sk.name in non_relative_shape_keys and sk.name != basis_name:
+                if shape_key_name in obj.data.shape_keys.key_blocks:
+                    obj.active_shape_key_index = obj.data.shape_keys.key_blocks.find(sk.name)
+                    bpy.ops.mesh.blend_from_shape(shape=shape_key_name, blend=-1, add=True)
+                else:
+                    print(f"[Warning] {shape_key_name} or {shape_key_name}_original is not found in shape keys")
+
+        bpy.context.object.active_shape_key_index = basis_index
+        bpy.ops.mesh.blend_from_shape(shape=shape_key_name, blend=1, add=True)
+
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+        if original_shape_key_name in obj.data.shape_keys.key_blocks:
+            original_shape_key = obj.data.shape_keys.key_blocks.get(original_shape_key_name)
+            obj.shape_key_remove(original_shape_key)
+        
+        # 不要なシェイプキーを削除
+        if shape_key:
+            obj.shape_key_remove(shape_key)
+
+        # configファイルのblendShapeFieldsで生成されたシェイプキーの変位にmask_weightsを適用
+        if config_generated_shape_keys:
+            # ベースシェイプの頂点位置を取得
+            basis_shape_key = obj.data.shape_keys.key_blocks.get(basis_name)
+            if basis_shape_key:
+                basis_positions = np.array([v.co for v in basis_shape_key.data])
+                
+                # 各生成されたシェイプキーに対してマスクを適用
+                for shape_key_name_to_mask, mask_weights in config_generated_shape_keys.items():
+                    if shape_key_name_to_mask == basis_name:
+                        continue
+                        
+                    shape_key_to_mask = obj.data.shape_keys.key_blocks.get(shape_key_name_to_mask)
+                    if shape_key_to_mask:
+                        # 現在のシェイプキーの頂点位置を取得
+                        shape_positions = np.array([v.co for v in shape_key_to_mask.data])
+                        
+                        # 変位を計算
+                        displacement = shape_positions - basis_positions
+                        
+                        # マスクを適用（変位にmask_weightsを掛ける）
+                        if mask_weights is not None:
+                            masked_displacement = displacement * mask_weights[:, np.newaxis]
+                        else:
+                            masked_displacement = displacement
+                        
+                        # マスク適用後の位置を計算
+                        new_positions = basis_positions + masked_displacement
+                        
+                        # シェイプキーの頂点位置を更新
+                        for i, vertex in enumerate(shape_key_to_mask.data):
+                            vertex.co = new_positions[i]
+                        
+    for unused_shape_key_name in shape_keys_to_remove:
+        if unused_shape_key_name in obj.data.shape_keys.key_blocks:
+            unused_shape_key = obj.data.shape_keys.key_blocks.get(unused_shape_key_name)
+            if unused_shape_key:
+                obj.shape_key_remove(unused_shape_key)
+            else:
+                print(f"[Warning] {unused_shape_key_name} is not found in shape keys")
+        else:
+            print(f"[Warning] {unused_shape_key_name} is not found in shape keys")
+    
+    return shape_key, config_blend_shape_labels

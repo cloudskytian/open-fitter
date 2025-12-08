@@ -1,0 +1,229 @@
+"""WeightTransferPreparationStage: ウェイト転送の準備処理を担当するステージ"""
+
+import os
+import sys
+
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+_CURR_DIR = os.path.dirname(os.path.abspath(__file__))
+_PARENT_DIR = os.path.dirname(_CURR_DIR)
+for _p in (_PARENT_DIR,):
+    if _p not in sys.path:
+        sys.path.append(_p)
+
+from algo_utils.search_utils import find_containing_objects
+from algo_utils.mesh_topology_utils import find_vertices_near_faces
+from algo_utils.vertex_group_utils import process_humanoid_vertex_groups
+from blender_utils.armature_utils import (
+    restore_armature_modifier,
+    set_armature_modifier_target_armature,
+    set_armature_modifier_visibility,
+    store_armature_modifier_settings,
+)
+from blender_utils.weight_processing_utils import process_missing_bone_weights
+from blender_utils.weight_transfer_utils import (
+    transfer_weights_from_nearest_vertex,
+)
+from duplicate_mesh_with_partial_weights import duplicate_mesh_with_partial_weights
+from generate_temp_shapekeys_for_weight_transfer import (
+    generate_temp_shapekeys_for_weight_transfer,
+)
+from io_utils.io_utils import load_vertex_group
+
+
+class WeightTransferPreparationStage:
+    """ウェイト転送の準備処理を担当するステージ
+    
+    責務:
+        - ベースメッシュの左右複製（最終pairのみ）
+        - メッシュ間の包含関係検出
+        - subHumanoidBones/subAuxiliaryBones の適用（最終pairのみ）
+        - Template固有の頂点グループ処理（最終pairのみ）
+        - 各メッシュの前処理（一時シェイプキー、欠損ボーンウェイト等）
+    
+    ベースメッシュ依存:
+        - 最終pairでのみbase_mesh/base_armatureを使用
+        - 中間pairではベースメッシュ関連処理をスキップ
+    
+    前提:
+        - MeshDeformationStage が完了していること
+    
+    成果物:
+        - containing_objects（包含関係マップ）
+        - armature_settings_dict（アーマチュア設定保存）
+        - original_humanoid_bones, original_auxiliary_bones
+    """
+    
+    # ベースメッシュ依存フラグ: 最終pairでのみ必要
+    REQUIRES_BASE_MESH = 'final_pair_only'
+
+    def __init__(self, pipeline):
+        self.pipeline = pipeline
+
+    def run(self):
+        p = self.pipeline
+        time = p.time_module
+        is_final_pair = (p.pair_index == p.total_pairs - 1)
+
+        # ベースメッシュ複製（最終pairのみ - base_meshが必要）
+        if is_final_pair:
+            right_base_mesh, left_base_mesh = duplicate_mesh_with_partial_weights(
+                p.base_mesh, p.base_avatar_data
+            )
+        # 中間pairではbase_meshがNoneのためスキップ
+        
+        # 包含関係検出
+        p.containing_objects = find_containing_objects(p.clothing_meshes, threshold=0.04)
+        # ボーンデータ準備（最終pairのみ）
+        if is_final_pair:
+            self._apply_sub_bone_data(p)
+        else:
+            p.original_humanoid_bones = None
+            p.original_auxiliary_bones = None
+
+        # Template固有の頂点グループ処理（最終pairのみ - base_meshが必要）
+        if is_final_pair:
+            self._apply_template_vertex_groups(p)
+
+        # 各メッシュの前処理
+        p.armature_settings_dict = {}
+        for obj in p.clothing_meshes:
+            self._preprocess_mesh(obj, p, time, is_final_pair)
+
+    def _apply_sub_bone_data(self, p):
+        """subHumanoidBones/subAuxiliaryBones を適用"""
+        p.original_humanoid_bones = None
+        p.original_auxiliary_bones = None
+
+        if not (
+            p.base_avatar_data.get('subHumanoidBones')
+            or p.base_avatar_data.get('subAuxiliaryBones')
+        ):
+            return
+
+
+        # 元のボーンデータを保存
+        if p.base_avatar_data.get('humanoidBones'):
+            p.original_humanoid_bones = p.base_avatar_data['humanoidBones'].copy()
+        else:
+            p.original_humanoid_bones = []
+
+        if p.base_avatar_data.get('auxiliaryBones'):
+            p.original_auxiliary_bones = p.base_avatar_data['auxiliaryBones'].copy()
+        else:
+            p.original_auxiliary_bones = []
+
+        # subHumanoidBones の適用
+        if p.base_avatar_data.get('subHumanoidBones'):
+            sub_humanoid_bones = p.base_avatar_data['subHumanoidBones']
+            humanoid_bones = p.base_avatar_data.get('humanoidBones', [])
+
+            for sub_bone in sub_humanoid_bones:
+                sub_humanoid_name = sub_bone.get('humanoidBoneName')
+                if sub_humanoid_name:
+                    for i, existing_bone in enumerate(humanoid_bones):
+                        if existing_bone.get('humanoidBoneName') == sub_humanoid_name:
+                            humanoid_bones[i] = sub_bone.copy()
+                            break
+                    else:
+                        humanoid_bones.append(sub_bone.copy())
+
+        # subAuxiliaryBones の適用
+        if p.base_avatar_data.get('subAuxiliaryBones'):
+            sub_auxiliary_bones = p.base_avatar_data['subAuxiliaryBones']
+            auxiliary_bones = p.base_avatar_data.get('auxiliaryBones', [])
+
+            for sub_aux in sub_auxiliary_bones:
+                sub_humanoid_name = sub_aux.get('humanoidBoneName')
+                if sub_humanoid_name:
+                    for i, existing_aux in enumerate(auxiliary_bones):
+                        if existing_aux.get('humanoidBoneName') == sub_humanoid_name:
+                            auxiliary_bones[i] = sub_aux.copy()
+                            break
+                    else:
+                        auxiliary_bones.append(sub_aux.copy())
+
+
+    def _apply_template_vertex_groups(self, p):
+        """Template固有の頂点グループ処理"""
+        # 脇の頂点グループ（AポーズかつbasePoseAがある場合のみ）
+        if (
+            p.base_avatar_data.get("name", None) == "Template"
+            and p.is_A_pose
+            and p.base_avatar_data.get('basePoseA', None)
+        ):
+            armpit_vertex_group_filepath = os.path.join(
+                os.path.dirname(p.config_pair['base_fbx']),
+                "vertex_group_weights_armpit.json",
+            )
+            armpit_group_name = load_vertex_group(p.base_mesh, armpit_vertex_group_filepath)
+            if armpit_group_name:
+                for obj in p.clothing_meshes:
+                    find_vertices_near_faces(p.base_mesh, obj, armpit_group_name, 0.1, 45.0)
+
+        # その他のTemplate固有頂点グループ
+        if p.base_avatar_data.get("name", None) != "Template":
+            return
+
+        base_fbx_dir = os.path.dirname(p.config_pair['base_fbx'])
+
+        # 股下グループ
+        crotch_filepath = os.path.join(base_fbx_dir, "vertex_group_weights_crotch2.json")
+        crotch_group_name = load_vertex_group(p.base_mesh, crotch_filepath)
+        if crotch_group_name:
+            for obj in p.clothing_meshes:
+                find_vertices_near_faces(p.base_mesh, obj, crotch_group_name, 0.01, smooth_repeat=3)
+
+        # ぼかしグループ
+        blur_filepath = os.path.join(base_fbx_dir, "vertex_group_weights_blur.json")
+        blur_group_name = load_vertex_group(p.base_mesh, blur_filepath)
+        if blur_group_name:
+            for obj in p.clothing_meshes:
+                transfer_weights_from_nearest_vertex(p.base_mesh, obj, blur_group_name)
+
+        # インペイントグループ
+        inpaint_filepath = os.path.join(base_fbx_dir, "vertex_group_weights_inpaint.json")
+        inpaint_group_name = load_vertex_group(p.base_mesh, inpaint_filepath)
+        if inpaint_group_name:
+            for obj in p.clothing_meshes:
+                transfer_weights_from_nearest_vertex(p.base_mesh, obj, inpaint_group_name)
+
+    def _preprocess_mesh(self, obj, p, time, is_final_pair):
+        """単一メッシュの前処理"""
+
+        # アーマチュア設定を保存
+        armature_settings = store_armature_modifier_settings(obj)
+        p.armature_settings_dict[obj] = armature_settings
+
+        # 一時シェイプキー生成
+        generate_temp_shapekeys_for_weight_transfer(
+            obj, p.clothing_armature, p.clothing_avatar_data, p.is_A_pose
+        )
+
+        # 以下は最終pairでのみ実行（base_armatureが必要）
+        if is_final_pair:
+            # 欠損ボーンウェイト処理
+            process_missing_bone_weights(
+                obj,
+                p.base_armature,
+                p.clothing_avatar_data,
+                p.base_avatar_data,
+                preserve_optional_humanoid_bones=False,
+            )
+
+            # ヒューマノイド頂点グループ処理
+            process_humanoid_vertex_groups(
+                obj,
+                p.clothing_armature,
+                p.base_avatar_data,
+                p.clothing_avatar_data,
+            )
+
+            # アーマチュア設定復元・切り替え
+            restore_armature_modifier(obj, p.armature_settings_dict[obj])
+            set_armature_modifier_visibility(obj, False, False)
+            set_armature_modifier_target_armature(obj, p.base_armature)
+        else:
+            # 中間pair: アーマチュア設定復元のみ
+            restore_armature_modifier(obj, p.armature_settings_dict[obj])
+

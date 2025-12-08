@@ -261,7 +261,7 @@ def parse_args():
             config_pairs[i]['base_fbx'] = "DO_NOT_USE_TEMPLATE.fbx"
             print(f"=== PoC VERIFICATION: config_pairs[{i}]['base_fbx'] changed from '{original_path}' to 'DO_NOT_USE_TEMPLATE.fbx' ===")
     
-    # Store configuration pairs in args for later use
+    # Store configuration pairs in args for later use (後方互換性)
     args.config_pairs = config_pairs
             
     # Parse hips position if provided
@@ -272,5 +272,6 @@ def parse_args():
         except:
             print("Error: Invalid hips position format. Use x,y,z")
             sys.exit(1)
-            
-    return args
+    
+    # 新アーキテクチャ: (args, config_pairs)を返す
+    return args, config_pairs

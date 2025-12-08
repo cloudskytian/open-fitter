@@ -47,7 +47,6 @@ class BoneReplacementStage:
 
         # 中間pairではボーン置換をスキップ（base_armatureがNone）
         if not is_final_pair:
-            print("=== PoC: 中間pairのためボーン置換をスキップ ===")
             p.bones_replace_time = time.time()
             return
 

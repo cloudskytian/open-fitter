@@ -253,13 +253,11 @@ def parse_args():
         if config_pairs[i].get('next_blendshape_settings', None):
             print(f"config_pairs[{i}]['next_blendshape_settings']: {config_pairs[i]['next_blendshape_settings']}")
     
-    # PoC: 中間pairのbase_fbxパスを無効化して依存排除を検証
-    # 最後のpair以外はTemplate.fbxを使わないはずなので、存在しないパスに書き換える
+    # 中間pairではbase_fbxを使用しない（最終pairでのみターゲットアバターFBXをロード）
+    # Template.fbx依存を排除するため、中間pairのbase_fbxをNoneに設定
     if len(config_pairs) >= 2:
         for i in range(len(config_pairs) - 1):
-            original_path = config_pairs[i]['base_fbx']
-            config_pairs[i]['base_fbx'] = "DO_NOT_USE_TEMPLATE.fbx"
-            print(f"=== PoC VERIFICATION: config_pairs[{i}]['base_fbx'] changed from '{original_path}' to 'DO_NOT_USE_TEMPLATE.fbx' ===")
+            config_pairs[i]['base_fbx'] = None
     
     # Store configuration pairs in args for later use (後方互換性)
     args.config_pairs = config_pairs

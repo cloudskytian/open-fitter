@@ -102,18 +102,15 @@ class OutfitRetargetPipeline:
             # サイクル1: メッシュ変形処理
             MeshDeformationStage(self).run()
 
-            # ウェイト転送は最後のpairでのみ実行（中間pairでは不要）
-            # Template依存排除のためのPoC実装
+            # ウェイト転送は最終pairでのみ実行（中間pairではbase_meshがないため不要）
             is_final_pair = (self.pair_index == self.total_pairs - 1)
             
-            # サイクル2: ウェイト転送準備（前処理は常に必要）
+            # サイクル2: ウェイト転送準備
             WeightTransferPreparationStage(self).run()
             
+            # サイクル2: ウェイト転送本体（最終pairでのみ実行）
             if is_final_pair:
-                # サイクル2: ウェイト転送本体（最後のpairでのみ実行）
                 WeightTransferExecutionStage(self).run()
-            else:
-                print("=== PoC: 中間pairのためウェイト転送実行をスキップ ===")
             
             # サイクル2: ウェイト転送後処理（アーマチュア設定復元は常に必要）
             WeightTransferPostProcessStage(self).run()

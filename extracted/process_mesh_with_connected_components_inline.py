@@ -45,8 +45,7 @@ def process_mesh_with_connected_components_inline(obj, field_data_path, blend_sh
             min_distance=0.0,
             max_distance=0.1
         )
-    else:
-        print("=== PoC: Body.BaseAvatarが存在しないため距離ウェイト計算をスキップ ===")
+    # base_objがNone（中間pair）の場合は距離ウェイト計算をスキップ
     
     # 連結成分を分離（アーマチュア設定等も保持）
     separated_objects, non_separated_objects = separate_and_combine_components(obj, clothing_armature, clustering=True)

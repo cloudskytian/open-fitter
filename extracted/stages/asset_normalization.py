@@ -94,8 +94,7 @@ class AssetNormalizationStage:
                     p.base_avatar_data,
                     invert=False,
                 )
-        else:
-            print("=== PoC: 中間pairのためベースポーズ適用をスキップ ===")
+        # 中間pairではbase_armatureがNoneのためスキップ
         base_pose_time = time.time()
         print(f"ベースポーズ適用: {base_pose_time - stage_start_time:.2f}秒")
 
@@ -104,8 +103,7 @@ class AssetNormalizationStage:
         print(f"Progress: {(p.pair_index + 0.25) / p.total_pairs * 0.9:.3f}")
         if is_final_pair:
             setup_weight_transfer()
-        else:
-            print("=== PoC: 中間pairのためウェイト転送セットアップをスキップ ===")
+        # 中間pairではBody.BaseAvatarが存在しないためスキップ
         setup_time = time.time()
         print(f"ウェイト転送セットアップ: {setup_time - base_pose_time:.2f}秒")
 
@@ -115,8 +113,7 @@ class AssetNormalizationStage:
         if is_final_pair:
             # ベースメッシュの空頂点グループを削除
             remove_empty_vertex_groups(p.base_mesh)
-        else:
-            print("=== PoC: 中間pairのためベースメッシュ処理をスキップ ===")
+        # 中間pairではbase_meshがNoneのためスキップ
 
         # ボーン名変換（最初のペアで、変換ファイルがある場合）
         if (
@@ -153,8 +150,7 @@ class AssetNormalizationStage:
 
             # ボーンウェイトの正規化
             normalize_bone_weights(p.base_mesh, p.base_avatar_data)
-        else:
-            print("=== PoC: 中間pairのためベースアバターウェイト更新をスキップ ===")
+        # 中間pairではbase_meshがNoneのためスキップ
 
         p.base_weights_time = time.time()
         print(f"ベースアバターウェイト更新: {p.base_weights_time - setup_time:.2f}秒")

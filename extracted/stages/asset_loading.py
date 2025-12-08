@@ -70,8 +70,8 @@ class AssetLoadingStage:
                 p.config_pair['base_avatar_data'],
             )
         else:
-            # 中間pair: avatar_dataのみロード、FBXはスキップ
-            print("=== PoC: 中間pairのためbase_fbxロードをスキップ ===")
+            # 中間pair: avatar_data（JSON）のみロード、FBXインポートはスキップ
+            # ウェイト転送は最終pairでのみ行うため、中間pairではbase_meshは不要
             from io_utils.io_utils import load_avatar_data
             p.base_avatar_data = load_avatar_data(p.config_pair['base_avatar_data'])
             p.base_mesh = None

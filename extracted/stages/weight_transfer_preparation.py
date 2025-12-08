@@ -73,7 +73,7 @@ class WeightTransferPreparationStage:
             duplicate_time = time.time()
             print(f"ベースメッシュ複製: {duplicate_time - p.cycle1_end_time:.2f}秒")
         else:
-            print("=== PoC: 中間pairのためベースメッシュ複製をスキップ ===")
+            # 中間pairではbase_meshがNoneのためスキップ
             duplicate_time = time.time()
 
         # 包含関係検出
@@ -101,8 +101,6 @@ class WeightTransferPreparationStage:
         # Template固有の頂点グループ処理（最終pairのみ - base_meshが必要）
         if is_final_pair:
             self._apply_template_vertex_groups(p)
-        else:
-            print("=== PoC: 中間pairのためTemplate頂点グループ処理をスキップ ===")
 
         # 各メッシュの前処理
         p.armature_settings_dict = {}

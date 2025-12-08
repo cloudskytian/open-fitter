@@ -134,8 +134,8 @@ class OutfitRetargetPipeline:
             self._status(2, total_stages, "アセット正規化中...")
             AssetNormalizationStage(self).run()
             # Template専用の調整処理
-            if not TemplateAdjustmentStage(self).run():
-                return None
+            # if not TemplateAdjustmentStage(self).run():
+            #     return None
             # BlendShape変形フィールド適用
             self._status(4, total_stages, "BlendShape変形フィールド適用中...")
             BlendShapeApplicationStage(self).run()

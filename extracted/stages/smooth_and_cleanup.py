@@ -15,9 +15,10 @@ def smooth_and_cleanup(context):
     bpy.ops.mesh.select_all(action="DESELECT")
     inpaint_mask_group = context.target_obj.vertex_groups.get("InpaintMask")
     if inpaint_mask_group:
+        inpaint_group_idx = inpaint_mask_group.index
         for vert in context.target_obj.data.vertices:
             for g in vert.groups:
-                if g.group == inpaint_mask_group.index and g.weight >= 0.5:
+                if g.group == inpaint_group_idx and g.weight >= 0.5:
                     vert.select = True
                     break
 
@@ -31,15 +32,34 @@ def smooth_and_cleanup(context):
     bpy.ops.object.mode_set(mode="OBJECT")
 
     cleanup_weights_time_start = time.time()
+    
+    # bone_groupsに属するグループのインデックスをセット化（高速検索用）
+    bone_group_indices = set()
+    for group_name in context.bone_groups:
+        if group_name in context.target_obj.vertex_groups:
+            bone_group_indices.add(context.target_obj.vertex_groups[group_name].index)
+    
+    # 削除対象を一括収集してから処理（頂点ごとのremove呼び出しを最小化）
+    removal_map = {}  # group_idx -> [vert_indices]
+    
     for vert in context.target_obj.data.vertices:
-        groups_to_remove = []
         for g in vert.groups:
-            group_name = context.target_obj.vertex_groups[g.group].name
-            if group_name in context.bone_groups and g.weight < 0.001:
-                groups_to_remove.append(g.group)
-        for group_idx in groups_to_remove:
-            try:
-                context.target_obj.vertex_groups[group_idx].remove([vert.index])
-            except RuntimeError:
-                continue
+            if g.group in bone_group_indices and g.weight < 0.001:
+                if g.group not in removal_map:
+                    removal_map[g.group] = []
+                removal_map[g.group].append(vert.index)
+    
+    # グループごとにまとめて削除
+    for group_idx, vert_indices in removal_map.items():
+        group = context.target_obj.vertex_groups[group_idx]
+        try:
+            group.remove(vert_indices)
+        except RuntimeError:
+            # 個別にフォールバック
+            for vert_idx in vert_indices:
+                try:
+                    group.remove([vert_idx])
+                except RuntimeError:
+                    continue
+    
     cleanup_weights_time = time.time() - cleanup_weights_time_start

@@ -68,20 +68,28 @@ def _get_existing_target_groups(ctx: WeightTransferContext):
 
 
 def _store_original_vertex_weights(ctx: WeightTransferContext):
+    """
+    頂点ごとの元のウェイトを保存する（最適化版）
+    グループインデックス→グループ名のマップを事前構築して高速化
+    """
     import time
     start_time = time.time()
+    
+    # グループインデックス→グループ名のマップを構築（対象グループのみ）
+    target_group_indices = {}
+    for vg in ctx.target_obj.vertex_groups:
+        if vg.name in ctx.existing_target_groups:
+            target_group_indices[vg.index] = vg.name
+    
     original_vertex_weights = {}
-    for vert_idx, vert in enumerate(ctx.target_obj.data.vertices):
+    for vert in ctx.target_obj.data.vertices:
         weights = {}
-        for group_name in ctx.existing_target_groups:
-            weight = 0.0
-            for g in vert.groups:
-                if ctx.target_obj.vertex_groups[g.group].name == group_name:
-                    weight = g.weight
-                    break
-            if weight > 0.0001:
-                weights[group_name] = weight
-        original_vertex_weights[vert_idx] = weights
+        for g in vert.groups:
+            group_name = target_group_indices.get(g.group)
+            if group_name is not None and g.weight > 0.0001:
+                weights[group_name] = g.weight
+        original_vertex_weights[vert.index] = weights
+    
     ctx.original_vertex_weights = original_vertex_weights
     return original_vertex_weights
 
@@ -271,14 +279,30 @@ def _collect_obb_data(ctx: WeightTransferContext):
 
 
 def _process_obb_groups(ctx: WeightTransferContext):
+    """
+    OBB内の頂点を処理してConnected_*グループを作成する
+    
+    処理内容:
+    1. OBB内の頂点を選択
+    2. (オプション) 閉じたエッジループを検出して選択を制限
+    3. select_moreで選択を拡張
+    4. Connected_*グループにウェイトを設定
+    5. スムージングと減衰処理
+    
+    注: エッジループ検出は計算コストが高いため、
+    USE_EDGE_LOOP_DETECTION=Falseでスキップ可能
+    """
     import time
     start_time = time.time()
+    
+    # エッジループ検出を使用するかどうか（Falseで大幅な高速化）
+    USE_EDGE_LOOP_DETECTION = False
 
     neighbors_info, offsets, num_verts = create_vertex_neighbors_array(ctx.target_obj, expand_distance=0.02, sigma=0.00659)
     ctx.neighbors_info = neighbors_info
     ctx.offsets = offsets
     ctx.num_verts = num_verts
-    start_time = time.time()
+    
     bpy.ops.object.mode_set(mode='EDIT')
 
     for obb_idx, data in enumerate(ctx.obb_data):
@@ -293,62 +317,20 @@ def _process_obb_groups(ctx: WeightTransferContext):
         bmesh.update_edit_mesh(ctx.target_obj.data)
         initial_selection = {v.index for v in bm.verts if v.select}
 
-        if initial_selection:
-            selected_edges = [e for e in bm.edges if all(v.select for v in e.verts)]
-            complete_loops = set()
-            edge_count = len(selected_edges)
-            for edge_idx, edge in enumerate(selected_edges):
-                if edge_idx % 100 == 0 and edge_idx > 0:
-                    pass  # Auto-inserted
-
+        if initial_selection and USE_EDGE_LOOP_DETECTION:
+            # エッジループ検出（計算コストが高い）
+            complete_loops = _detect_closed_edge_loops_bmesh(
+                bm, initial_selection, data['original_pattern_weights'], ctx.original_vertex_weights
+            )
+            
+            if complete_loops:
                 bpy.ops.mesh.select_all(action='DESELECT')
-                edge.select = True
-                bmesh.update_edit_mesh(ctx.target_obj.data)
-                bpy.ops.mesh.loop_multi_select(ring=False)
-
                 bm = bmesh.from_edit_mesh(ctx.target_obj.data)
-                loop_verts = {v.index for v in bm.verts if v.select}
-
-                is_closed_loop = True
-                for v in bm.verts:
-                    if v.select:
-                        selected_edge_count = sum(1 for e in v.link_edges if e.select)
-                        total_edge_count = len(v.link_edges)
-                        if selected_edge_count != 2 or total_edge_count != 4:
-                            is_closed_loop = False
-                            break
-
-                if is_closed_loop:
-                    is_similar_pattern = True
-                    pattern_weights = data['original_pattern_weights']
-
-                    for vert_idx in loop_verts:
-                        if vert_idx in ctx.original_vertex_weights:
-                            orig_weights = ctx.original_vertex_weights[vert_idx]
-                            similarity_score = 0.0
-                            total_weight = 0.0
-
-                            for group_name, pattern_weight in pattern_weights.items():
-                                orig_weight = orig_weights.get(group_name, 0.0)
-                                diff = abs(pattern_weight - orig_weight)
-                                similarity_score += diff
-                                total_weight += pattern_weight
-
-                            if total_weight > 0:
-                                normalized_score = similarity_score / total_weight
-                                if normalized_score > 0.05:
-                                    is_similar_pattern = False
-                                    break
-
-                    if is_similar_pattern:
-                        complete_loops.update(loop_verts)
-
-            bpy.ops.mesh.select_all(action='DESELECT')
-            bm = bmesh.from_edit_mesh(ctx.target_obj.data)
-            for vert in bm.verts:
-                if vert.index in complete_loops:
-                    vert.select = True
-            bmesh.update_edit_mesh(ctx.target_obj.data)
+                bm.verts.ensure_lookup_table()
+                for vert in bm.verts:
+                    if vert.index in complete_loops:
+                        vert.select = True
+                bmesh.update_edit_mesh(ctx.target_obj.data)
 
         for _ in range(1):
             bpy.ops.mesh.select_more()
@@ -414,7 +396,146 @@ def _process_obb_groups(ctx: WeightTransferContext):
 
     bpy.ops.object.mode_set(mode='OBJECT')
 
+
+def _detect_closed_edge_loops_bmesh(bm, initial_selection, pattern_weights, original_vertex_weights):
+    """
+    BMeshを使用して閉じたエッジループを検出する（bpy.ops不使用版）
+    
+    Parameters:
+        bm: BMeshオブジェクト
+        initial_selection: 初期選択頂点のセット
+        pattern_weights: パターンウェイト辞書
+        original_vertex_weights: 元の頂点ウェイト辞書
+    
+    Returns:
+        set: 閉じたループに属する頂点インデックスのセット
+    """
+    bm.verts.ensure_lookup_table()
+    bm.edges.ensure_lookup_table()
+    
+    # 両端が選択されているエッジを収集
+    selected_edges = [e for e in bm.edges if all(v.index in initial_selection for v in e.verts)]
+    
+    if not selected_edges:
+        return set()
+    
+    complete_loops = set()
+    visited_edges = set()
+    
+    for start_edge in selected_edges:
+        if start_edge.index in visited_edges:
+            continue
+        
+        # このエッジからループをトレース
+        loop_verts, loop_edges, is_closed = _trace_edge_loop(bm, start_edge, initial_selection)
+        
+        visited_edges.update(e.index for e in loop_edges)
+        
+        if not is_closed:
+            continue
+        
+        # 閉じたループの品質チェック（quad mesh前提）
+        is_valid_loop = True
+        for v_idx in loop_verts:
+            v = bm.verts[v_idx]
+            # ループ内エッジ数と総エッジ数をチェック
+            loop_edge_count = sum(1 for e in v.link_edges if e in loop_edges)
+            if loop_edge_count != 2 or len(v.link_edges) != 4:
+                is_valid_loop = False
+                break
+        
+        if not is_valid_loop:
+            continue
+        
+        # ウェイトパターンの類似性チェック
+        is_similar = _check_pattern_similarity(loop_verts, pattern_weights, original_vertex_weights)
+        
+        if is_similar:
+            complete_loops.update(loop_verts)
+    
+    return complete_loops
+
+
+def _trace_edge_loop(bm, start_edge, allowed_verts):
+    """
+    エッジからループをトレースする
+    
+    Returns:
+        (loop_verts, loop_edges, is_closed)
+    """
+    loop_verts = set()
+    loop_edges = [start_edge]
+    
+    for v in start_edge.verts:
+        loop_verts.add(v.index)
+    
+    # 両方向にトレース
+    for direction in [0, 1]:
+        current_edge = start_edge
+        current_vert = start_edge.verts[direction]
+        
+        max_iterations = 10000  # 無限ループ防止
+        for _ in range(max_iterations):
+            # 次のエッジを探す（同一面を共有し、allowed_verts内）
+            next_edge = None
+            for link_edge in current_vert.link_edges:
+                if link_edge == current_edge:
+                    continue
+                if link_edge in loop_edges:
+                    # ループが閉じた
+                    return loop_verts, loop_edges, True
+                
+                other_vert = link_edge.other_vert(current_vert)
+                if other_vert.index not in allowed_verts:
+                    continue
+                
+                # 同一面を共有するエッジを優先（ループ継続）
+                shared_faces = set(current_edge.link_faces) & set(link_edge.link_faces)
+                if shared_faces:
+                    next_edge = link_edge
+                    break
+            
+            if next_edge is None:
+                break
+            
+            loop_edges.append(next_edge)
+            current_edge = next_edge
+            current_vert = next_edge.other_vert(current_vert)
+            loop_verts.add(current_vert.index)
+    
+    return loop_verts, loop_edges, False
+
+
+def _check_pattern_similarity(loop_verts, pattern_weights, original_vertex_weights, threshold=0.05):
+    """
+    ループ頂点のウェイトパターンが元のパターンと類似しているかチェック
+    """
+    for vert_idx in loop_verts:
+        if vert_idx not in original_vertex_weights:
+            continue
+        
+        orig_weights = original_vertex_weights[vert_idx]
+        similarity_score = 0.0
+        total_weight = 0.0
+        
+        for group_name, pattern_weight in pattern_weights.items():
+            orig_weight = orig_weights.get(group_name, 0.0)
+            diff = abs(pattern_weight - orig_weight)
+            similarity_score += diff
+            total_weight += pattern_weight
+        
+        if total_weight > 0:
+            normalized_score = similarity_score / total_weight
+            if normalized_score > threshold:
+                return False
+    
+    return True
+
 def _synthesize_weights(ctx: WeightTransferContext):
+    """
+    Connected_* グループのウェイトを合成する（最適化版）
+    事前にデータ構造を構築して検索を高速化
+    """
     import time
     start_time = time.time()
     connected_groups = [vg for vg in ctx.target_obj.vertex_groups if vg.name.startswith("Connected_")]
@@ -422,77 +543,81 @@ def _synthesize_weights(ctx: WeightTransferContext):
     if not connected_groups:
         return
 
+    # スキップ対象の頂点インデックスを事前にセット化
+    skip_vertices = set()
+    for (_, _), components in ctx.component_patterns.items():
+        for component in components:
+            skip_vertices.update(component)
+    
+    # Connected グループのインデックス→グループ情報のマップ
+    connected_group_map = {}  # group_index -> (component_id, group_obj)
+    for vg in connected_groups:
+        component_id = int(vg.name.split('_')[1])
+        connected_group_map[vg.index] = (component_id, vg)
+    
+    # component_id → pattern_weights のマップを構築
+    component_pattern_map = {}  # component_id -> pattern_tuple
+    for data in ctx.obb_data:
+        pattern_tuple = tuple(sorted((k, v) for k, v in data['pattern_weights'].items() if v > 0.0001))
+        component_pattern_map[data['component_id']] = pattern_tuple
+    
+    # 対象グループのインデックス→名前マップ
+    target_group_indices = {}
+    target_group_objects = {}
+    for vg in ctx.target_obj.vertex_groups:
+        if vg.name in ctx.existing_target_groups:
+            target_group_indices[vg.index] = vg.name
+            target_group_objects[vg.name] = vg
+
     for vert in ctx.target_obj.data.vertices:
-        skip = False
-        for (_, _), components in ctx.component_patterns.items():
-            for component in components:
-                if vert.index in component:
-                    skip = True
-                    break
-            if skip:
-                break
-        if skip:
+        if vert.index in skip_vertices:
             continue
 
         connected_weights = {}
         total_weight = 0.0
 
-        for connected_group in connected_groups:
-            weight = 0.0
-            for g in vert.groups:
-                if g.group == connected_group.index:
-                    weight = g.weight
-                    break
+        # 頂点のグループを一度走査して必要な情報を収集
+        vert_group_weights = {}  # group_index -> weight
+        for g in vert.groups:
+            vert_group_weights[g.group] = g.weight
 
+        for group_idx, (component_id, _) in connected_group_map.items():
+            weight = vert_group_weights.get(group_idx, 0.0)
             if weight > 0:
-                component_id = int(connected_group.name.split('_')[1])
-                for data in ctx.obb_data:
-                    if data['component_id'] == component_id:
-                        pattern_tuple = tuple(sorted((k, v) for k, v in data['pattern_weights'].items() if v > 0.0001))
-                        connected_weights[pattern_tuple] = weight
-                        total_weight += weight
-                        break
+                pattern_tuple = component_pattern_map.get(component_id)
+                if pattern_tuple:
+                    connected_weights[pattern_tuple] = weight
+                    total_weight += weight
 
         if total_weight <= 0:
             continue
 
-        combined_weights = {}
-        for pattern, weight in connected_weights.items():
-            normalized_weight = weight / total_weight
-            for group_name, value in pattern:
-                if group_name not in combined_weights:
-                    combined_weights[group_name] = 0.0
-                combined_weights[group_name] += value * normalized_weight
-
         factor = min(total_weight, 1.0)
+        
+        # 既存ウェイトを収集
         existing_weights = {}
-        for group_name in ctx.existing_target_groups:
-            if group_name in ctx.target_obj.vertex_groups:
-                group = ctx.target_obj.vertex_groups[group_name]
-                weight = 0.0
-                for g in vert.groups:
-                    if g.group == group.index:
-                        weight = g.weight
-                        break
-                existing_weights[group_name] = weight
+        for group_idx, group_name in target_group_indices.items():
+            existing_weights[group_name] = vert_group_weights.get(group_idx, 0.0)
 
+        # 新しいウェイトを計算
         new_weights = {}
         for group_name, weight in existing_weights.items():
-            if group_name in ctx.target_obj.vertex_groups and group_name in ctx.existing_target_groups:
-                new_weights[group_name] = weight * (1.0 - factor)
+            new_weights[group_name] = weight * (1.0 - factor)
 
         for pattern, weight in connected_weights.items():
             normalized_weight = weight / total_weight
             if total_weight < 1.0:
                 normalized_weight = weight
             for group_name, value in pattern:
-                if group_name in ctx.target_obj.vertex_groups and group_name in ctx.existing_target_groups:
-                    compornent_weight = value * normalized_weight
-                    new_weights[group_name] = new_weights[group_name] + compornent_weight
+                if group_name in target_group_objects:
+                    component_weight = value * normalized_weight
+                    new_weights[group_name] = new_weights.get(group_name, 0.0) + component_weight
 
+        # ウェイトを適用
         for group_name, weight in new_weights.items():
             if weight > 1.0:
                 weight = 1.0
-            group = ctx.target_obj.vertex_groups[group_name]
-            group.add([vert.index], weight, 'REPLACE')
+            group = target_group_objects.get(group_name)
+            if group:
+                group.add([vert.index], weight, 'REPLACE')
 

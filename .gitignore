@@ -1,4 +1,4 @@
-# すべてを無視する（デフォルト！E
+# すべてを無視する（デフォルト設定）
 /*
 
 # dev/ ディレクトリは追跡対象（旧extracted/）
@@ -12,45 +12,18 @@
 # ルート直下のpyファイルは追跡対象
 !/*.py
 
-# UnityProjectチE��レクトリは基本無視だが、一部追跡
-!/UnityProject/
-/UnityProject/*
-
-# UnityProject/Assetsは基本無視だが、一部追跡
-!/UnityProject/Assets/
-/UnityProject/Assets/*
-
-# UnityProject/Assets/OpenFitterは基本無視だが、一部追跡
-!/UnityProject/Assets/OpenFitter/
-/UnityProject/Assets/OpenFitter/*
-
-# UnityProject/Assets/OpenFitter/Scriptsは追跡対象
-!/UnityProject/Assets/OpenFitter/Scripts/
-!/UnityProject/Assets/OpenFitter/Scripts/**/*.cs
-
-# .gitignore自体�E追跡対象
+# .gitignore自体は追跡対象
 !.gitignore
 
 # .gitattributesは追跡対象
 !.gitattributes
 
-# README等�Eドキュメントがあれば追跡対象にする場吁E
+# README等ドキュメントがあれば追跡対象にする
 !/LICENSE
 !/README.md
-#! Allow tracking of GPL core directory
+
+#! upstream ソースコードを追跡対象にする
 !/src/
 /src/*
 !/src/upstream/
 !/src/upstream/**
-
-# Allow tracking of blender_addon directory
-!/blender_addon/
-!/blender_addon/**
-
-Original.py
-
-# Ignore extracted scripts
-/src/upstream/extracted/
-
-# Generated documents
-generated_documents/

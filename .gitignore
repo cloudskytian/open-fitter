@@ -1,9 +1,9 @@
 # すべてを無視する（デフォルト！E
 /*
 
-# extracted/ ディレクトリは追跡対象
-!/extracted/
-!/extracted/**
+# dev/ ディレクトリは追跡対象（旧extracted/）
+!/dev/
+!/dev/**
 
 # tools/ ディレクトリは追跡対象
 !/tools/
